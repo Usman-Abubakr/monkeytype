@@ -644,16 +644,12 @@ export function findGetParameter(parameterName: string): string | null {
   return result;
 }
 
-export function objectToQueryString<T extends string | number | boolean>(
-  obj: Record<string, T | T[]>
-): string {
+export function objectToQueryString(obj: object): string {
   const str = [];
   for (const p in obj)
     if (Object.prototype.hasOwnProperty.call(obj, p)) {
-      // Arrays get encoded as a comma(%2C)-separated list
-      str.push(
-        encodeURIComponent(p) + "=" + encodeURIComponent(obj[p] as unknown as T)
-      );
+      // @ts-ignore //todo help
+      str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
     }
   return str.join("&");
 }
@@ -748,7 +744,8 @@ export function cleanTypographySymbols(textToClean: string): string {
   };
   return textToClean.replace(
     /[“”’‘—,…«»–\u2007\u202F\u00A0]/g,
-    (char) => specials[char as keyof typeof specials] || ""
+    // @ts-ignore
+    (char) => specials[char] || ""
   );
 }
 
@@ -845,13 +842,8 @@ export function convertRGBtoHEX(rgb: string): string | undefined {
   return "#" + hexCode(match[1]) + hexCode(match[2]) + hexCode(match[3]);
 }
 
-interface LastIndex extends String {
-  lastIndexOfRegex(regex: RegExp): number;
-}
-
-(String.prototype as LastIndex).lastIndexOfRegex = function (
-  regex: RegExp
-): number {
+// @ts-ignore
+String.prototype.lastIndexOfRegex = function (regex: RegExp): number {
   const match = this.match(regex);
   return match ? this.lastIndexOf(match[match.length - 1]) : -1;
 };
