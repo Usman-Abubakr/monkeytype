@@ -1,17 +1,16 @@
-import { isUsernameValid } from "../handlers/validation";
-import { updateAuthEmail } from "../handlers/auth";
-import { checkAndUpdatePb } from "../handlers/pb";
+import _ from "lodash";
+import { isUsernameValid } from "../utils/validation";
+import { updateUserEmail } from "../utils/auth";
+import { checkAndUpdatePb } from "../utils/pb";
 import db from "../init/db";
-import MonkeyError from "../handlers/error";
-import Mongo from "mongodb";
-
-const { ObjectID } = Mongo;
+import MonkeyError from "../utils/error";
+import { ObjectId } from "mongodb";
 
 class UsersDAO {
   static async addUser(name, email, uid) {
     const user = await db.collection("users").findOne({ uid });
     if (user)
-      throw new MonkeyError(400, "User document already exists", "addUser");
+      throw new MonkeyError(409, "User document already exists", "addUser");
     return await db
       .collection("users")
       .insertOne({ name, email, uid, addedAt: Date.now() });
@@ -22,10 +21,8 @@ class UsersDAO {
   }
 
   static async updateName(uid, name) {
-    const nameDoc = await db
-      .collection("users")
-      .findOne({ name: { $regex: new RegExp(`^${name}$`, "i") } });
-    if (nameDoc) throw new MonkeyError(409, "Username already taken", name);
+    if (!this.isNameAvailable(name))
+      throw new MonkeyError(409, "Username already taken", name);
     let user = await db.collection("users").findOne({ uid });
     if (
       Date.now() - user.lastNameChange < 2592000000 &&
@@ -45,8 +42,13 @@ class UsersDAO {
   }
 
   static async isNameAvailable(name) {
-    const nameDoc = await db.collection("users").findOne({ name });
-    if (nameDoc) {
+    const nameDocs = await db
+      .collection("users")
+      .find({ name })
+      .collation({ locale: "en", strength: 1 })
+      .limit(1)
+      .toArray();
+    if (nameDocs.length !== 0) {
       return false;
     } else {
       return true;
@@ -64,7 +66,7 @@ class UsersDAO {
   static async updateEmail(uid, email) {
     const user = await db.collection("users").findOne({ uid });
     if (!user) throw new MonkeyError(404, "User not found", "update email");
-    await updateAuthEmail(uid, email);
+    await updateUserEmail(uid, email);
     await db.collection("users").updateOne({ uid }, { $set: { email } });
     return true;
   }
@@ -75,15 +77,13 @@ class UsersDAO {
     return user;
   }
 
-  static async getUserByDiscordId(discordId) {
+  static async isDiscordIdAvailable(discordId) {
     const user = await db.collection("users").findOne({ discordId });
-    if (!user)
-      throw new MonkeyError(404, "User not found", "get user by discord id");
-    return user;
+    return _.isNil(user);
   }
 
   static async addTag(uid, name) {
-    let _id = ObjectID();
+    const _id = new ObjectId();
     await db
       .collection("users")
       .updateOne({ uid }, { $push: { tags: { _id, name } } });
@@ -110,7 +110,7 @@ class UsersDAO {
     return await db.collection("users").updateOne(
       {
         uid: uid,
-        "tags._id": ObjectID(_id),
+        "tags._id": new ObjectId(_id),
       },
       { $set: { "tags.$.name": name } }
     );
@@ -127,9 +127,9 @@ class UsersDAO {
     return await db.collection("users").updateOne(
       {
         uid: uid,
-        "tags._id": ObjectID(_id),
+        "tags._id": new ObjectId(_id),
       },
-      { $pull: { tags: { _id: ObjectID(_id) } } }
+      { $pull: { tags: { _id: new ObjectId(_id) } } }
     );
   }
 
@@ -144,7 +144,7 @@ class UsersDAO {
     return await db.collection("users").updateOne(
       {
         uid: uid,
-        "tags._id": ObjectID(_id),
+        "tags._id": new ObjectId(_id),
       },
       { $set: { "tags.$.personalBests": {} } }
     );
@@ -166,23 +166,8 @@ class UsersDAO {
     );
   }
 
-  static async checkIfPb(uid, result) {
-    const user = await db.collection("users").findOne({ uid });
-    if (!user) throw new MonkeyError(404, "User not found", "check if pb");
-
-    const {
-      mode,
-      mode2,
-      acc,
-      consistency,
-      difficulty,
-      lazyMode,
-      language,
-      punctuation,
-      rawWpm,
-      wpm,
-      funbox,
-    } = result;
+  static async checkIfPb(uid, user, result) {
+    const { mode, funbox } = result;
 
     if (funbox !== "none" && funbox !== "plus_one" && funbox !== "plus_two") {
       return false;
@@ -195,20 +180,7 @@ class UsersDAO {
     let lbpb = user.lbPersonalBests;
     if (!lbpb) lbpb = {};
 
-    let pb = checkAndUpdatePb(
-      user.personalBests,
-      lbpb,
-      mode,
-      mode2,
-      acc,
-      consistency,
-      difficulty,
-      lazyMode,
-      language,
-      punctuation,
-      rawWpm,
-      wpm
-    );
+    let pb = checkAndUpdatePb(user.personalBests, lbpb, result);
 
     if (pb.isPb) {
       await db
@@ -225,28 +197,12 @@ class UsersDAO {
     }
   }
 
-  static async checkIfTagPb(uid, result) {
-    const user = await db.collection("users").findOne({ uid });
-    if (!user) throw new MonkeyError(404, "User not found", "check if tag pb");
-
+  static async checkIfTagPb(uid, user, result) {
     if (user.tags === undefined || user.tags.length === 0) {
       return [];
     }
 
-    const {
-      mode,
-      mode2,
-      acc,
-      consistency,
-      difficulty,
-      lazyMode,
-      language,
-      punctuation,
-      rawWpm,
-      wpm,
-      tags,
-      funbox,
-    } = result;
+    const { mode, tags, funbox } = result;
 
     if (funbox !== "none" && funbox !== "plus_one" && funbox !== "plus_two") {
       return [];
@@ -268,26 +224,13 @@ class UsersDAO {
     let ret = [];
 
     tagsToCheck.forEach(async (tag) => {
-      let tagpb = checkAndUpdatePb(
-        tag.personalBests,
-        undefined,
-        mode,
-        mode2,
-        acc,
-        consistency,
-        difficulty,
-        lazyMode,
-        language,
-        punctuation,
-        rawWpm,
-        wpm
-      );
+      let tagpb = checkAndUpdatePb(tag.personalBests, undefined, result);
       if (tagpb.isPb) {
         ret.push(tag._id);
         await db
           .collection("users")
           .updateOne(
-            { uid, "tags._id": ObjectID(tag._id) },
+            { uid, "tags._id": new ObjectId(tag._id) },
             { $set: { "tags.$.personalBests": tagpb.obj } }
           );
       }
@@ -305,10 +248,6 @@ class UsersDAO {
   }
 
   static async updateTypingStats(uid, restartCount, timeTyping) {
-    const user = await db.collection("users").findOne({ uid });
-    if (!user)
-      throw new MonkeyError(404, "User not found", "update typing stats");
-
     return await db.collection("users").updateOne(
       { uid },
       {
@@ -356,6 +295,94 @@ class UsersDAO {
         .updateOne({ uid }, { $inc: { bananas: 1 } });
     } else {
       return null;
+    }
+  }
+
+  static themeDoesNotExist(customThemes, id) {
+    return (
+      (customThemes ?? []).filter((t) => t._id.toString() === id).length === 0
+    );
+  }
+
+  static async addTheme(uid, theme) {
+    const user = await db.collection("users").findOne({ uid });
+    if (!user) throw new MonkeyError(404, "User not found", "Add custom theme");
+
+    if ((user.customThemes ?? []).length >= 10)
+      throw new MonkeyError(409, "Too many custom themes");
+
+    const _id = new ObjectId();
+    await db.collection("users").updateOne(
+      { uid },
+      {
+        $push: {
+          customThemes: {
+            _id,
+            name: theme.name,
+            colors: theme.colors,
+          },
+        },
+      }
+    );
+
+    return {
+      _id,
+      name: theme.name,
+    };
+  }
+
+  static async removeTheme(uid, _id) {
+    const user = await db.collection("users").findOne({ uid });
+    if (!user)
+      throw new MonkeyError(404, "User not found", "Remove custom theme");
+
+    if (this.themeDoesNotExist(user.customThemes, _id))
+      throw new MonkeyError(404, "Custom theme not found");
+
+    return await db.collection("users").updateOne(
+      {
+        uid: uid,
+        "customThemes._id": new ObjectId(_id),
+      },
+      { $pull: { customThemes: { _id: new ObjectId(_id) } } }
+    );
+  }
+
+  static async editTheme(uid, _id, theme) {
+    const user = await db.collection("users").findOne({ uid });
+    if (!user)
+      throw new MonkeyError(404, "User not found", "Edit custom theme");
+
+    if (this.themeDoesNotExist(user.customThemes, _id))
+      throw new MonkeyError(404, "Custom Theme not found");
+
+    return await db.collection("users").updateOne(
+      {
+        uid: uid,
+        "customThemes._id": new ObjectId(_id),
+      },
+      {
+        $set: {
+          "customThemes.$.name": theme.name,
+          "customThemes.$.colors": theme.colors,
+        },
+      }
+    );
+  }
+
+  static async getThemes(uid) {
+    const user = await db.collection("users").findOne({ uid });
+    if (!user)
+      throw new MonkeyError(404, "User not found", "Get custom themes");
+    return user.customThemes ?? [];
+  }
+
+  static async getPersonalBests(uid, mode, mode2) {
+    const user = await db.collection("users").findOne({ uid });
+    if (mode2) {
+      return user?.personalBests?.[mode]?.[mode2];
+    } else {
+      return user?.personalBests?.[mode];
     }
   }
 }

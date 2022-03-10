@@ -1,4 +1,4 @@
-import ConfigurationDAO from "../dao/configuration";
+import ConfigurationClient from "../init/configuration";
 import { Response, NextFunction } from "express";
 
 async function contextMiddleware(
@@ -6,13 +6,14 @@ async function contextMiddleware(
   _res: Response,
   next: NextFunction
 ): Promise<void> {
-  const configuration = await ConfigurationDAO.getCachedConfiguration(true);
+  const configuration = await ConfigurationClient.getCachedConfiguration(true);
 
   req.ctx = {
     configuration,
     decodedToken: {
-      uid: null,
-      email: null,
+      type: "None",
+      uid: "",
+      email: "",
     },
   };
 

@@ -20,7 +20,7 @@ import * as PaceCaret from "../test/pace-caret";
 import * as TimerProgress from "../test/timer-progress";
 import * as Focus from "../test/focus";
 import * as ShiftTracker from "../test/shift-tracker";
-import * as Replay from "../test/replay.js";
+import * as Replay from "../test/replay";
 import * as MonkeyPower from "../elements/monkey-power";
 import * as WeakSpot from "../test/weak-spot";
 import * as Leaderboards from "../elements/leaderboards";
@@ -190,7 +190,8 @@ function handleSpace(): void {
       return;
     }
     PaceCaret.handleSpace(false, currentWord);
-    if (Config.blindMode) $("#words .word.active letter").addClass("correct");
+    if (Config.blindMode && Config.highlightMode !== "off")
+      $("#words .word.active letter").addClass("correct");
     TestInput.input.pushHistory();
     TestUI.highlightBadWord(TestUI.currentWordElementIndex, !Config.blindMode);
     TestWords.words.increaseCurrentIndex();
@@ -466,7 +467,11 @@ function handleChar(char: string, charIndex: number): void {
   TestInput.updateLastKeypress();
   TestInput.pushKeypressWord(TestWords.words.currentIndex);
 
-  if (Config.stopOnError == "letter" && !thisCharCorrect) {
+  if (
+    Config.difficulty !== "master" &&
+    Config.stopOnError == "letter" &&
+    !thisCharCorrect
+  ) {
     return;
   }
 
@@ -481,7 +486,7 @@ function handleChar(char: string, charIndex: number): void {
     TestWords.words.currentIndex === 0
   ) {
     TestUI.setActiveWordTop(
-      document.querySelector<HTMLElement>("#words .active")?.offsetTop
+      (<HTMLElement>document.querySelector("#words .active"))?.offsetTop
     );
   }
 
@@ -641,7 +646,7 @@ function handleTab(event: JQuery.KeyDownEvent): void {
           (Config.mode === "zen" && event.shiftKey)
         ) {
           event.preventDefault();
-          $("#restartTestButton").focus();
+          $("#restartTestButton").trigger("focus");
         } else {
           event.preventDefault();
           handleChar("\t", TestInput.input.current.length);
@@ -779,6 +784,7 @@ $(document).keydown(async (event) => {
     correctShiftUsed =
       (await ShiftTracker.isUsingOppositeShift(event)) !== false;
   }
+
   if (Config.funbox === "arrows") {
     let char = event.key;
     if (["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(char)) {
@@ -898,7 +904,7 @@ $("#wordsInput").on("input", (event) => {
   }, 0);
 });
 
-$("#wordsInput").focus((event) => {
+$("#wordsInput").on("focus", (event) => {
   (event.target as HTMLInputElement).selectionStart = (
     event.target as HTMLInputElement
   ).selectionEnd = (event.target as HTMLInputElement).value.length;

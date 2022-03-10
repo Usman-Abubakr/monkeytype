@@ -22,6 +22,7 @@ import * as PaceCaret from "../test/pace-caret";
 import * as CommandlineLists from "../elements/commandline-lists";
 import * as TagController from "./tag-controller";
 import * as ResultTagsPopup from "../popups/result-tags-popup";
+import * as URLHandler from "../utils/url-handler";
 
 export const gmailProvider = new firebase.auth.GoogleAuthProvider();
 // const githubProvider = new firebase.auth.GithubAuthProvider();
@@ -143,7 +144,7 @@ export async function getDataAndInit() {
       AccountButton.loading(false);
       UpdateConfig.apply(snapshot.config);
       Settings.update();
-      UpdateConfig.saveToLocalStorage(true);
+      UpdateConfig.saveFullConfigToLocalStorage(true);
       TestLogic.restart(false, true);
     } else if (snapshot.config !== undefined) {
       //loading db config, keep for now
@@ -182,7 +183,7 @@ export async function getDataAndInit() {
         AccountButton.loading(false);
         UpdateConfig.apply(snapshot.config);
         Settings.update();
-        UpdateConfig.saveToLocalStorage(true);
+        UpdateConfig.saveFullConfigToLocalStorage(true);
         if (ActivePage.get() == "test") {
           TestLogic.restart(false, true);
         }
@@ -280,21 +281,7 @@ const authListener = firebase.auth().onAuthStateChanged(async function (user) {
     }, 125 / 2);
   }
 
-  let theme = Misc.findGetParameter("customTheme");
-  if (theme !== null) {
-    try {
-      theme = theme.split(",");
-      UpdateConfig.setCustomThemeColors(theme);
-      Notifications.add("Custom theme applied.", 1);
-    } catch (e) {
-      Notifications.add(
-        "Something went wrong. Reverting to default custom colors.",
-        0
-      );
-      UpdateConfig.setCustomThemeColors(Config.defaultConfig.customThemeColors);
-    }
-    UpdateConfig.setCustomTheme(true);
-  }
+  URLHandler.loadCustomThemeFromUrl();
   if (/challenge_.+/g.test(window.location.pathname)) {
     Notifications.add(
       "Challenge links temporarily disabled. Please use the command line to load the challenge manually",
@@ -312,6 +299,7 @@ const authListener = firebase.auth().onAuthStateChanged(async function (user) {
 });
 
 export function signIn() {
+  UpdateConfig.setChangedBeforeDb(false);
   authListener();
   $(".pageLogin .preloader").removeClass("hidden");
   $(".pageLogin .button").addClass("disabled");
@@ -366,6 +354,7 @@ export function signIn() {
 }
 
 export async function signInWithGoogle() {
+  UpdateConfig.setChangedBeforeDb(false);
   $(".pageLogin .preloader").removeClass("hidden");
   $(".pageLogin .button").addClass("disabled");
   authListener();
@@ -407,7 +396,7 @@ export async function signInWithGoogle() {
       }
       //create database object for the new user
       // try {
-      const response = Ape.users.create(name);
+      const response = await Ape.users.create(name);
       if (response.status !== 200) {
         throw response;
       }
@@ -434,9 +423,15 @@ export async function signInWithGoogle() {
           );
 
           if (resultsSaveResponse.status === 200) {
-            const snapshot = DB.getSnapshot();
-            snapshot.results.push(TestLogic.notSignedInLastResult);
-            DB.setSnapshot(snapshot);
+            const result = TestLogic.notSignedInLastResult;
+            DB.saveLocalResult(result);
+            DB.updateLocalStats({
+              time:
+                result.testDuration +
+                result.incompleteTestSeconds -
+                result.afkDuration,
+              started: 1,
+            });
           }
         }
       }
@@ -449,10 +444,11 @@ export async function signInWithGoogle() {
     Notifications.add("Failed to sign in with Google: " + e.message, -1);
     $(".pageLogin .preloader").addClass("hidden");
     $(".pageLogin .button").removeClass("disabled");
-    if (signedInUser?.user) {
-      signedInUser.user.delete();
+    if (signedInUser?.additionalUserInfo?.isNewUser) {
       await Ape.users.delete();
+      await signedInUser.user.delete();
     }
+    signOut();
     return;
   }
 }
@@ -633,7 +629,6 @@ async function signUp() {
     await createdAuthUser.user.updateProfile({ displayName: nname });
     await createdAuthUser.user.sendEmailVerification();
     AllTimeStats.clear();
-    Notifications.add("Account created", 1, 3);
     $("#menu .icon-button.account .text").text(nname);
     $(".pageLogin .button").removeClass("disabled");
     $(".pageLogin .preloader").addClass("hidden");
@@ -644,17 +639,24 @@ async function signUp() {
       const response = await Ape.results.save(TestLogic.notSignedInLastResult);
 
       if (response.status === 200) {
-        const snapshot = DB.getSnapshot();
-        snapshot.results.push(TestLogic.notSignedInLastResult);
-        DB.setSnapshot(snapshot);
+        const result = TestLogic.notSignedInLastResult;
+        DB.saveLocalResult(result);
+        DB.updateLocalStats({
+          time:
+            result.testDuration +
+            result.incompleteTestSeconds -
+            result.afkDuration,
+          started: 1,
+        });
       }
     }
     PageController.change("account");
+    Notifications.add("Account created", 1, 3);
   } catch (e) {
     //make sure to do clean up here
     if (createdAuthUser) {
-      await createdAuthUser.user.delete();
       await Ape.users.delete();
+      await createdAuthUser.user.delete();
     }
     let txt;
     if (e.response) {
@@ -667,11 +669,12 @@ async function signUp() {
     Notifications.add(txt, -1);
     $(".pageLogin .preloader").addClass("hidden");
     $(".pageLogin .button").removeClass("disabled");
+    signOut();
     return;
   }
 }
 
-$(".pageLogin #forgotPasswordButton").click((e) => {
+$(".pageLogin #forgotPasswordButton").on("click", (e) => {
   let email = prompt("Email address");
   if (email) {
     firebase
@@ -689,39 +692,39 @@ $(".pageLogin #forgotPasswordButton").click((e) => {
 });
 
 $(".pageLogin .login input").keyup((e) => {
-  if (e.key == "Enter") {
+  if (e.key === "Enter") {
     UpdateConfig.setChangedBeforeDb(false);
     signIn();
   }
 });
 
-$(".pageLogin .login .button.signIn").click((e) => {
+$(".pageLogin .login .button.signIn").on("click", (e) => {
   UpdateConfig.setChangedBeforeDb(false);
   signIn();
 });
 
-$(".pageLogin .login .button.signInWithGoogle").click((e) => {
+$(".pageLogin .login .button.signInWithGoogle").on("click", (e) => {
   UpdateConfig.setChangedBeforeDb(false);
   signInWithGoogle();
 });
 
-// $(".pageLogin .login .button.signInWithGitHub").click((e) => {
+// $(".pageLogin .login .button.signInWithGitHub").on("click",(e) => {
 // UpdateConfig.setChangedBeforeDb(false);
 // signInWithGitHub();
 // });
 
-$(".signOut").click((e) => {
+$(".signOut").on("click", (e) => {
   signOut();
 });
 
 $(".pageLogin .register input").keyup((e) => {
   if ($(".pageLogin .register .button").hasClass("disabled")) return;
-  if (e.key == "Enter") {
+  if (e.key === "Enter") {
     signUp();
   }
 });
 
-$(".pageLogin .register .button").click((e) => {
+$(".pageLogin .register .button").on("click", (e) => {
   if ($(".pageLogin .register .button").hasClass("disabled")) return;
   signUp();
 });

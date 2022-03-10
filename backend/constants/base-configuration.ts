@@ -16,12 +16,16 @@ const BASE_CONFIGURATION: MonkeyTypes.Configuration = {
   resultObjectHashCheck: {
     enabled: false,
   },
-  monkeyTokens: {
-    enabled: false,
+  apeKeys: {
+    endpointsEnabled: false,
+    acceptKeys: false,
+    maxKeysPerUser: 0,
+    apeKeyBytes: 24,
+    apeKeySaltRounds: 5,
   },
   enableSavingResults: {
     enabled: false,
   },
 };
 
-export default Object.freeze(BASE_CONFIGURATION);
+export default BASE_CONFIGURATION;

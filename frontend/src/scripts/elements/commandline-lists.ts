@@ -291,26 +291,23 @@ const commandsPresets: MonkeyTypes.CommandsGroup = {
 
 export function updatePresetCommands(): void {
   const snapshot = DB.getSnapshot();
+  if (!snapshot || !snapshot.presets || snapshot.presets.length === 0) return;
+  commandsPresets.list = [];
+  snapshot.presets.forEach((preset: MonkeyTypes.Preset) => {
+    const dis = preset.name;
 
-  if (snapshot.presets !== undefined && snapshot.presets.length > 0) {
-    commandsPresets.list = [];
-
-    snapshot.presets.forEach((preset: MonkeyTypes.Preset) => {
-      const dis = preset.name;
-
-      commandsPresets.list.push({
-        id: "applyPreset" + preset._id,
-        display: dis,
-        exec: (): void => {
-          Settings.setEventDisabled(true);
-          PresetController.apply(preset._id);
-          Settings.setEventDisabled(false);
-          Settings.update();
-          ModesNotice.update();
-        },
-      });
+    commandsPresets.list.push({
+      id: "applyPreset" + preset._id,
+      display: dis,
+      exec: (): void => {
+        Settings.setEventDisabled(true);
+        PresetController.apply(preset._id);
+        Settings.setEventDisabled(false);
+        Settings.update();
+        ModesNotice.update();
+      },
     });
-  }
+  });
 }
 
 const commandsRepeatQuotes: MonkeyTypes.CommandsGroup = {
@@ -1150,6 +1147,21 @@ const commandsRandomTheme: MonkeyTypes.CommandsGroup = {
         UpdateConfig.setRandomTheme("dark");
       },
     },
+    {
+      id: "setRandomCustom",
+      display: "custom",
+      configValue: "custom",
+      exec: (): void => {
+        if (firebase.auth().currentUser === null) {
+          Notifications.add(
+            "Multiple custom themes are available to logged in users only",
+            0
+          );
+          return;
+        }
+        UpdateConfig.setRandomTheme("custom");
+      },
+    },
   ],
 };
 
@@ -1215,8 +1227,8 @@ export const commandsEnableAds: MonkeyTypes.CommandsGroup = {
   ],
 };
 
-const commandsCustomTheme: MonkeyTypes.CommandsGroup = {
-  title: "Custom theme...",
+export const customThemeCommands: MonkeyTypes.CommandsGroup = {
+  title: "Custom theme",
   configKey: "customTheme",
   list: [
     {
@@ -1237,6 +1249,41 @@ const commandsCustomTheme: MonkeyTypes.CommandsGroup = {
     },
   ],
 };
+
+export const customThemeListCommands: MonkeyTypes.CommandsGroup = {
+  title: "Custom themes list...",
+  // configKey: "customThemeId",
+  list: [],
+};
+
+export function updateCustomThemeListCommands(): void {
+  if (firebase.auth().currentUser === null) {
+    return;
+  }
+
+  customThemeListCommands.list = [];
+
+  if (DB.getSnapshot().customThemes.length < 0) {
+    Notifications.add("You need to create a custom theme first", 0);
+    return;
+  }
+  DB.getSnapshot().customThemes.forEach((theme) => {
+    customThemeListCommands.list.push({
+      id: "setCustomThemeId" + theme._id,
+      display: theme.name,
+      configValue: theme._id,
+      hover: (): void => {
+        ThemeController.preview(theme._id, true);
+      },
+      exec: (): void => {
+        // UpdateConfig.setCustomThemeId(theme._id);
+        UpdateConfig.setCustomTheme(true);
+        ThemeController.set(theme._id, true);
+      },
+    });
+  });
+  return;
+}
 
 const commandsCaretStyle: MonkeyTypes.CommandsGroup = {
   title: "Change caret style...",
@@ -1591,6 +1638,14 @@ const commandsKeymapLegendStyle: MonkeyTypes.CommandsGroup = {
       configValue: "blank",
       exec: (): void => {
         UpdateConfig.setKeymapLegendStyle("blank");
+      },
+    },
+    {
+      id: "setKeymapLegendStyleDynamic",
+      display: "dynamic",
+      configValue: "dynamic",
+      exec: (): void => {
+        UpdateConfig.setKeymapLegendStyle("dynamic");
       },
     },
   ],
@@ -2360,7 +2415,7 @@ Misc.getThemesList().then((themes) => {
       configValue: theme.name,
       hover: (): void => {
         // previewTheme(theme.name);
-        ThemeController.preview(theme.name);
+        ThemeController.preview(theme.name, false);
       },
       exec: (): void => {
         UpdateConfig.setTheme(theme.name);
@@ -2399,7 +2454,7 @@ export function updateThemeCommands(): void {
         display: theme.replace(/_/g, " "),
         hover: (): void => {
           // previewTheme(theme);
-          ThemeController.preview(theme);
+          ThemeController.preview(theme, false);
         },
         exec: (): void => {
           UpdateConfig.setTheme(theme);
@@ -2414,7 +2469,7 @@ export function updateThemeCommands(): void {
           display: theme.name.replace(/_/g, " "),
           hover: (): void => {
             // previewTheme(theme.name);
-            ThemeController.preview(theme.name);
+            ThemeController.preview(theme.name, false);
           },
           exec: (): void => {
             UpdateConfig.setTheme(theme.name);
@@ -2459,31 +2514,31 @@ const commandsMonkeyPowerLevel: MonkeyTypes.CommandsGroup = {
       id: "monkeyPowerLevelOff",
       display: "off",
       configValue: "off",
-      exec: (): void => UpdateConfig.setMonkeyPowerLevel("off"),
+      exec: () => UpdateConfig.setMonkeyPowerLevel("off"),
     },
     {
       id: "monkeyPowerLevel1",
       display: "mellow",
       configValue: "1",
-      exec: (): void => UpdateConfig.setMonkeyPowerLevel("1"),
+      exec: () => UpdateConfig.setMonkeyPowerLevel("1"),
     },
     {
       id: "monkeyPowerLevel2",
       display: "high",
       configValue: "2",
-      exec: (): void => UpdateConfig.setMonkeyPowerLevel("2"),
+      exec: () => UpdateConfig.setMonkeyPowerLevel("2"),
     },
     {
       id: "monkeyPowerLevel3",
       display: "ultra",
       configValue: "3",
-      exec: (): void => UpdateConfig.setMonkeyPowerLevel("3"),
+      exec: () => UpdateConfig.setMonkeyPowerLevel("3"),
     },
     {
       id: "monkeyPowerLevel4",
       display: "over 9000",
       configValue: "4",
-      exec: (): void => UpdateConfig.setMonkeyPowerLevel("4"),
+      exec: () => UpdateConfig.setMonkeyPowerLevel("4"),
     },
   ],
 };
@@ -2793,7 +2848,17 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       id: "setCustomTheme",
       display: "Custom theme...",
       icon: "fa-palette",
-      subgroup: commandsCustomTheme,
+      subgroup: customThemeCommands,
+    },
+    {
+      id: "setCustomThemeId",
+      display: "Custom themes...",
+      icon: "fa-palette",
+      subgroup: customThemeListCommands,
+      beforeSubgroup: (): void => updateCustomThemeListCommands(),
+      available: (): boolean => {
+        return firebase.auth().currentUser !== null;
+      },
     },
     {
       id: "changeRandomTheme",
@@ -2938,7 +3003,7 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       input: true,
       icon: "fa-tint",
       exec: (input): void => {
-        if (!input) return;
+        if (input === undefined) return;
         UpdateConfig.setCustomLayoutfluid(
           input as MonkeyTypes.CustomLayoutFluidSpaces
         );
@@ -2979,7 +3044,7 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       alias: "start begin type test",
       icon: "fa-keyboard",
       exec: (): void => {
-        $("#top #menu .icon-button.view-start").click();
+        $("#top #menu .icon-button.view-start").trigger("click");
       },
     },
     {
@@ -2987,7 +3052,7 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       display: "View Leaderboards Page",
       icon: "fa-crown",
       exec: (): void => {
-        $("#top #menu .icon-button.view-leaderboards").click();
+        $("#top #menu .icon-button.view-leaderboards").trigger("click");
       },
     },
     {
@@ -2995,7 +3060,7 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       display: "View About Page",
       icon: "fa-info",
       exec: (): void => {
-        $("#top #menu .icon-button.view-about").click();
+        $("#top #menu .icon-button.view-about").trigger("click");
       },
     },
     {
@@ -3003,7 +3068,7 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       display: "View Settings Page",
       icon: "fa-cog",
       exec: (): void => {
-        $("#top #menu .icon-button.view-settings").click();
+        $("#top #menu .icon-button.view-settings").trigger("click");
       },
     },
     {
@@ -3013,8 +3078,8 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       alias: "stats",
       exec: (): void => {
         $("#top #menu .icon-button.view-account").hasClass("hidden")
-          ? $("#top #menu .icon-button.view-login").click()
-          : $("#top #menu .icon-button.view-account").click();
+          ? $("#top #menu .icon-button.view-login").trigger("click")
+          : $("#top #menu .icon-button.view-account").trigger("click");
       },
     },
     {
@@ -3151,7 +3216,7 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
         if (!input) return;
         try {
           UpdateConfig.apply(JSON.parse(input));
-          UpdateConfig.saveToLocalStorage();
+          UpdateConfig.saveFullConfigToLocalStorage();
           Settings.update();
           Notifications.add("Done", 1);
         } catch (e) {
@@ -3210,24 +3275,44 @@ export function pushCurrent(val: MonkeyTypes.CommandsGroup): void {
   current.push(val);
 }
 
-export function getList(list: string): MonkeyTypes.CommandsGroup {
-  return eval(list);
+const listsObject = {
+  commandsChallenges,
+  commandsLanguages,
+  commandsDifficulty,
+  commandsLazyMode,
+  commandsPaceCaret,
+  commandsShowAvg,
+  commandsMinWpm,
+  commandsMinAcc,
+  commandsMinBurst,
+  commandsFunbox,
+  commandsConfidenceMode,
+  commandsStopOnError,
+  commandsLayouts,
+  commandsOppositeShiftMode,
+  commandsTags,
+};
+
+export type ListsObjectKeys = keyof typeof listsObject;
+
+export function getList(list: ListsObjectKeys): MonkeyTypes.CommandsGroup {
+  return listsObject[list];
 }
 
 ConfigEvent.subscribe((eventKey, eventValue) => {
   if (eventKey === "saveToLocalStorage") {
     defaultCommands.list.filter(
       (command) => command.id == "exportSettingsJSON"
-    )[0].defaultValue = eventValue;
+    )[0].defaultValue = eventValue as string;
   }
   if (eventKey === "customBackground") {
     defaultCommands.list.filter(
       (command) => command.id == "changeCustomBackground"
-    )[0].defaultValue = eventValue;
+    )[0].defaultValue = eventValue as string;
   }
   if (eventKey === "customLayoutFluid") {
     defaultCommands.list.filter(
       (command) => command.id == "changeCustomLayoutfluid"
-    )[0].defaultValue = eventValue?.replace(/#/g, " ");
+    )[0].defaultValue = (eventValue as string)?.replace(/#/g, " ");
   }
 });

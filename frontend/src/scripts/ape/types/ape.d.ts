@@ -111,6 +111,15 @@ declare namespace Ape {
       ) => EndpointData;
       updateEmail: (newEmail: string, previousEmail: string) => EndpointData;
       deletePersonalBests: Endpoint;
+      getCustomThemes: () => EndpointData;
+      addCustomTheme: (
+        newTheme: Partial<MonkeyTypes.CustomTheme>
+      ) => EndpointData;
+      editCustomTheme: (
+        themeId: string,
+        newTheme: Partial<MonkeyTypes.CustomTheme>
+      ) => EndpointData;
+      deleteCustomTheme: (themeId: string) => EndpointData;
       getTags: Endpoint;
       createTag: (tagName: string) => EndpointData;
       editTag: (tagId: string, newName: string) => EndpointData;
@@ -126,9 +135,19 @@ declare namespace Ape {
 
     results: {
       get: Endpoint;
-      save: (result: MonkeyTypes.Result) => EndpointData;
+      save: (result: MonkeyTypes.Result<MonkeyTypes.Mode>) => EndpointData;
       updateTags: (resultId: string, tagIds: string[]) => EndpointData;
       deleteAll: Endpoint;
+    };
+
+    apeKeys: {
+      get: Endpoint;
+      generate: (name: string, enabled: boolean) => EndpointData;
+      update: (
+        apeKeyId: string,
+        updates: { name?: string; enabled?: boolean }
+      ) => EndpointData;
+      delete: (apeKeyId: string) => EndpointData;
     };
   }
 }

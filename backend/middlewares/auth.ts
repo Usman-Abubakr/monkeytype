@@ -1,15 +1,19 @@
-import MonkeyError from "../handlers/error";
-import { verifyIdToken } from "../handlers/auth";
+import { compare } from "bcrypt";
+import ApeKeysDAO from "../dao/ape-keys";
+import MonkeyError from "../utils/error";
+import { verifyIdToken } from "../utils/auth";
+import { base64UrlDecode } from "../utils/misc";
 import { NextFunction, Response, Handler } from "express";
+import statuses from "../constants/monkey-status-codes";
 
 interface RequestAuthenticationOptions {
   isPublic?: boolean;
-  acceptMonkeyTokens?: boolean;
+  acceptApeKeys?: boolean;
 }
 
 const DEFAULT_OPTIONS: RequestAuthenticationOptions = {
   isPublic: false,
-  acceptMonkeyTokens: false,
+  acceptApeKeys: false,
 };
 
 function authenticateRequest(authOptions = DEFAULT_OPTIONS): Handler {
@@ -25,10 +29,14 @@ function authenticateRequest(authOptions = DEFAULT_OPTIONS): Handler {
   ): Promise<void> => {
     try {
       const { authorization: authHeader } = req.headers;
-      let token: MonkeyTypes.DecodedToken = {};
+      let token: MonkeyTypes.DecodedToken;
 
       if (authHeader) {
-        token = await authenticateWithAuthHeader(authHeader, options);
+        token = await authenticateWithAuthHeader(
+          authHeader,
+          req.ctx.configuration,
+          options
+        );
       } else if (options.isPublic) {
         return next();
       } else if (process.env.MODE === "dev") {
@@ -60,18 +68,21 @@ function authenticateWithBody(
 
   if (!uid) {
     throw new MonkeyError(
-      400,
+      401,
       "Running authorization in dev mode but still no uid was provided"
     );
   }
 
   return {
+    type: "Bearer",
     uid,
+    email: "",
   };
 }
 
 async function authenticateWithAuthHeader(
   authHeader: string,
+  configuration: MonkeyTypes.Configuration,
   options: RequestAuthenticationOptions
 ): Promise<MonkeyTypes.DecodedToken> {
   const token = authHeader.split(" ");
@@ -82,14 +93,14 @@ async function authenticateWithAuthHeader(
   switch (authScheme) {
     case "Bearer":
       return await authenticateWithBearerToken(credentials);
-    case "MonkeyToken":
-      return await authenticateWithMonkeyToken(credentials, options);
+    case "ApeKey":
+      return await authenticateWithApeKey(credentials, configuration, options);
   }
 
   throw new MonkeyError(
     401,
     "Unknown authentication scheme",
-    `The authentication scheme "${authScheme}" is not implemented.`
+    `The authentication scheme "${authScheme}" is not implemented`
   );
 }
 
@@ -100,8 +111,9 @@ async function authenticateWithBearerToken(
     const decodedToken = await verifyIdToken(token);
 
     return {
+      type: "Bearer",
       uid: decodedToken.uid,
-      email: decodedToken.email,
+      email: decodedToken.email ?? "",
     };
   } catch (error) {
     console.log("-----------");
@@ -126,15 +138,54 @@ async function authenticateWithBearerToken(
   }
 }
 
-async function authenticateWithMonkeyToken(
-  token: string,
+async function authenticateWithApeKey(
+  key: string,
+  configuration: MonkeyTypes.Configuration,
   options: RequestAuthenticationOptions
 ): Promise<MonkeyTypes.DecodedToken> {
-  if (!options.acceptMonkeyTokens) {
-    throw new MonkeyError(401, "This endpoint does not accept MonkeyTokens.");
+  if (!configuration.apeKeys.acceptKeys) {
+    throw new MonkeyError(403, "ApeKeys are not being accepted at this time");
   }
 
-  throw new MonkeyError(401, "MonkeyTokens are not implemented.");
+  if (!options.acceptApeKeys) {
+    throw new MonkeyError(401, "This endpoint does not accept ApeKeys");
+  }
+
+  try {
+    const decodedKey = base64UrlDecode(key);
+    const [keyId, apeKey] = decodedKey.split(".");
+
+    const targetApeKey = await ApeKeysDAO.getApeKey(keyId);
+    if (!targetApeKey) {
+      throw new MonkeyError(404, "ApeKey not found");
+    }
+
+    if (!targetApeKey.enabled) {
+      const { code, message } = statuses.APE_KEY_INACTIVE;
+      throw new MonkeyError(code, message);
+    }
+
+    const isKeyValid = await compare(apeKey, targetApeKey.hash);
+    if (!isKeyValid) {
+      const { code, message } = statuses.APE_KEY_INVALID;
+      throw new MonkeyError(code, message);
+    }
+
+    await ApeKeysDAO.updateLastUsedOn(targetApeKey.uid, keyId);
+
+    return {
+      type: "ApeKey",
+      uid: targetApeKey.uid,
+      email: "",
+    };
+  } catch (error) {
+    if (!(error instanceof MonkeyError)) {
+      const { code, message } = statuses.APE_KEY_MALFORMED;
+      throw new MonkeyError(code, message);
+    }
+
+    throw error;
+  }
 }
 
 export { authenticateRequest };

@@ -11,6 +11,18 @@ declare namespace MonkeyTypes {
 
   type LanguageGroup = { name: string; languages: string[] };
 
+  type Accents = [string, string][];
+
+  interface LanguageObject {
+    name: string;
+    leftToRight: boolean;
+    noLazyMode?: boolean;
+    ligatures?: boolean;
+    words: string[];
+    accents: Accents;
+    bcp47?: string;
+  }
+
   type WordsModes = number;
 
   type TimeModes = number;
@@ -21,9 +33,7 @@ declare namespace MonkeyTypes {
 
   type QuoteModes = "short" | "medium" | "long" | "thicc";
 
-  type QuoteLength = -1 | 0 | 1 | 2 | 3;
-
-  type QuoteLengthArray = QuoteLength[];
+  type QuoteLength = -2 | -1 | 0 | 1 | 2 | 3;
 
   type FontSize = "1" | "125" | "15" | "2" | "3" | "4";
 
@@ -40,7 +50,7 @@ declare namespace MonkeyTypes {
 
   type TimerStyle = "bar" | "text" | "mini";
 
-  type RandomTheme = "off" | "on" | "fav" | "light" | "dark";
+  type RandomTheme = "off" | "on" | "fav" | "light" | "dark" | "custom";
 
   type TimerColor = "black" | "sub" | "text" | "main";
 
@@ -57,7 +67,7 @@ declare namespace MonkeyTypes {
     | "split"
     | "split_matrix";
 
-  type KeymapLegendStyle = "lowercase" | "uppercase" | "blank";
+  type KeymapLegendStyle = "lowercase" | "uppercase" | "blank" | "dynamic";
 
   type SingleListCommandLine = "manual" | "on";
 
@@ -95,7 +105,7 @@ declare namespace MonkeyTypes {
 
   type CustomBackgroundSize = "cover" | "contain" | "max";
 
-  type CustomBackgroundFilter = [0 | 1, 0 | 1, 0 | 1, 0 | 1, 0 | 1];
+  type CustomBackgroundFilter = [number, number, number, number, number];
 
   /*
     off = off
@@ -122,6 +132,7 @@ declare namespace MonkeyTypes {
     name: string;
     type: FunboxObjectType;
     info: string;
+    affectsWordGeneration?: boolean;
   }
 
   interface CustomText {
@@ -131,6 +142,7 @@ declare namespace MonkeyTypes {
     word: number;
     time: number;
     delimiter: string;
+    textLen?: number;
   }
 
   interface PresetConfig extends MonkeyTypes.Config {
@@ -176,16 +188,26 @@ declare namespace MonkeyTypes {
     active?: boolean;
   }
 
+  interface RawCustomTheme {
+    name: string;
+    colors: string[];
+  }
+
+  interface CustomTheme extends RawCustomTheme {
+    _id: string;
+  }
+
   interface Stats {
     time: number;
     started: number;
-    completed: number;
+    completed?: number;
   }
 
   interface ChartData {
     wpm: number[];
     raw: number[];
     err: number[];
+    unsmoothedRaw?: number[];
   }
 
   interface KeyStats {
@@ -225,6 +247,19 @@ declare namespace MonkeyTypes {
     language: string;
     numbers?: boolean;
     punctuation?: boolean;
+    hash?: string;
+  }
+
+  type ApeKey = {
+    name: string;
+    enabled: boolean;
+    createdOn: number;
+    modifiedOn: number;
+    lastUsedOn: number;
+  };
+
+  interface ApeKeys {
+    [key: string]: ApeKey;
   }
 
   interface Config {
@@ -245,7 +280,7 @@ declare namespace MonkeyTypes {
     words: WordsModes;
     time: TimeModes;
     mode: Mode;
-    quoteLength: QuoteLengthArray;
+    quoteLength: QuoteLength[];
     language: string;
     fontSize: FontSize;
     freedomMode: boolean;
@@ -316,6 +351,17 @@ declare namespace MonkeyTypes {
     showAvg: boolean;
   }
 
+  type ConfigValues =
+    | string
+    | number
+    | boolean
+    | string[]
+    | MonkeyTypes.QuoteLength[]
+    | MonkeyTypes.ResultFilters
+    | MonkeyTypes.CustomBackgroundFilter
+    | null
+    | undefined;
+
   interface ConfigChanges extends Partial<MonkeyTypes.Config> {
     tags?: string[];
   }
@@ -370,6 +416,7 @@ declare namespace MonkeyTypes {
     verified?: boolean;
     personalBests?: PersonalBests;
     name?: string;
+    customThemes: CustomTheme[];
     presets?: Preset[];
     tags?: Tag[];
     favouriteThemes?: string[];
@@ -546,6 +593,7 @@ declare namespace MonkeyTypes {
     id: number;
     group?: number;
     language: string;
+    textSplit?: string[];
   }
 
   interface PSA {
@@ -573,7 +621,7 @@ declare namespace MonkeyTypes {
 
   interface Layout {
     keymapShowTopRow: boolean;
-    type: "iso" | "ansi" | "ortho";
+    type: "iso" | "ansi" | "ortho" | "matrix";
     keys: Keys;
   }
 
@@ -581,11 +629,16 @@ declare namespace MonkeyTypes {
     [layout: string]: Layout;
   }
   interface Keys {
-    [row1: string]: string[];
-    [row2: string]: string[];
-    [row3: string]: string[];
-    [row4: string]: string[];
-    [row5: string]: string[];
+    row1: string[];
+    row2: string[];
+    row3: string[];
+    row4: string[];
+    row5: string[];
+  }
+
+  interface WordsPerMinuteAndRaw {
+    wpm: number;
+    raw: number;
   }
 
   interface Challenge {

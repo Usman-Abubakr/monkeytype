@@ -6,7 +6,7 @@ function clearMemory(): void {
 }
 
 function getMemory(): string[] {
-  return JSON.parse(window.localStorage.getItem("confirmedPSAs") ?? "") ?? [];
+  return JSON.parse(window.localStorage.getItem("confirmedPSAs") ?? "[]") ?? [];
 }
 
 function setMemory(id: string): void {
@@ -37,7 +37,8 @@ export async function show(): Promise<void> {
   }
   const localmemory = getMemory();
   latest.forEach((psa) => {
-    if (localmemory.includes(psa._id) && psa.sticky === false) return;
+    if (localmemory.includes(psa._id) && (psa.sticky ?? false) === false)
+      return;
     Notifications.addBanner(
       psa.message,
       psa.level,

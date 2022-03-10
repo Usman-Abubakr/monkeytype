@@ -1,14 +1,12 @@
 import _ from "lodash";
 import joi from "joi";
-import MonkeyError from "../handlers/error";
+import MonkeyError from "../utils/error";
 import { Response, NextFunction, RequestHandler } from "express";
-import {
-  handleMonkeyResponse,
-  MonkeyResponse,
-} from "../handlers/monkey-response";
+import { handleMonkeyResponse, MonkeyResponse } from "../utils/monkey-response";
+import UsersDAO from "../dao/user";
 
-interface ConfigurationValidationOptions {
-  criteria: (configuration: MonkeyTypes.Configuration) => boolean;
+interface ValidationOptions<T> {
+  criteria: (data: T) => boolean;
   invalidMessage?: string;
 }
 
@@ -17,19 +15,53 @@ interface ConfigurationValidationOptions {
  * the criteria.
  */
 function validateConfiguration(
-  options: ConfigurationValidationOptions
+  options: ValidationOptions<MonkeyTypes.Configuration>
 ): RequestHandler {
-  const { criteria, invalidMessage } = options;
+  const {
+    criteria,
+    invalidMessage = "This service is currently unavailable.",
+  } = options;
 
   return (req: MonkeyTypes.Request, _res: Response, next: NextFunction) => {
     const configuration = req.ctx.configuration;
 
     const validated = criteria(configuration);
     if (!validated) {
-      throw new MonkeyError(
-        503,
-        invalidMessage ?? "This service is currently unavailable."
-      );
+      throw new MonkeyError(503, invalidMessage);
+    }
+
+    next();
+  };
+}
+
+/**
+ * Check user permissions before handling request.
+ * Note that this middleware must be used after authentication in the middleware stack.
+ */
+function checkUserPermissions(
+  options: ValidationOptions<MonkeyTypes.User>
+): RequestHandler {
+  const { criteria, invalidMessage = "You don't have permission to do this." } =
+    options;
+
+  return async (
+    req: MonkeyTypes.Request,
+    _res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { uid } = req.ctx.decodedToken;
+
+      const userData = (await UsersDAO.getUser(
+        uid
+      )) as unknown as MonkeyTypes.User;
+      const hasPermission = criteria(userData);
+
+      if (!hasPermission) {
+        throw new MonkeyError(403, invalidMessage);
+      }
+    } catch (error) {
+      next(error);
     }
 
     next();
@@ -38,7 +70,7 @@ function validateConfiguration(
 
 type AsyncHandler = (
   req: MonkeyTypes.Request,
-  res: Response
+  res?: Response
 ) => Promise<MonkeyResponse>;
 
 /**
@@ -98,9 +130,9 @@ function validateRequest(validationSchema: ValidationSchema): RequestHandler {
         if (error) {
           const errorMessage = error.details[0].message;
           throw new MonkeyError(
-            500,
+            422,
             validationErrorMessage ??
-              `${errorMessage} (${error.details[0].context.value})`
+              `${errorMessage} (${error.details[0]?.context?.value})`
           );
         }
       }
@@ -110,4 +142,9 @@ function validateRequest(validationSchema: ValidationSchema): RequestHandler {
   };
 }
 
-export { validateConfiguration, asyncHandler, validateRequest };
+export {
+  validateConfiguration,
+  checkUserPermissions,
+  asyncHandler,
+  validateRequest,
+};

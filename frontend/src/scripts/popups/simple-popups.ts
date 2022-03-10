@@ -6,13 +6,22 @@ import * as UpdateConfig from "../config";
 import * as Loader from "../elements/loader";
 import * as Notifications from "../elements/notifications";
 import * as Settings from "../pages/settings";
+import * as ApeKeysPopup from "../popups/ape-keys-popup";
+import * as ThemePicker from "../settings/theme-picker";
+import * as CustomText from "../test/custom-text";
+import * as CustomTextPopup from "../popups/custom-text-popup";
+import * as SavedTextsPopup from "./saved-texts-popup";
 
 type Input = {
-  placeholder: string;
+  placeholder?: string;
   type?: string;
   initVal: string;
   hidden?: boolean;
+  disabled?: boolean;
+  label?: string;
 };
+
+let activePopup: SimplePopup | null = null;
 
 export const list: { [key: string]: SimplePopup } = {};
 class SimplePopup {
@@ -26,7 +35,9 @@ class SimplePopup {
   text: string;
   buttonText: string;
   execFn: (thisPopup: SimplePopup, ...params: string[]) => void | Promise<void>;
+  beforeInitFn: (thisPopup: SimplePopup) => void;
   beforeShowFn: (thisPopup: SimplePopup) => void;
+  canClose: boolean;
   constructor(
     id: string,
     type: string,
@@ -38,6 +49,7 @@ class SimplePopup {
       thisPopup: SimplePopup,
       ...params: string[]
     ) => void | Promise<void>,
+    beforeInitFn: (thisPopup: SimplePopup) => void,
     beforeShowFn: (thisPopup: SimplePopup) => void
   ) {
     this.parameters = [];
@@ -51,7 +63,9 @@ class SimplePopup {
     this.wrapper = $("#simplePopupWrapper");
     this.element = $("#simplePopup");
     this.buttonText = buttonText;
+    this.beforeInitFn = (thisPopup): void => beforeInitFn(thisPopup);
     this.beforeShowFn = (thisPopup): void => beforeShowFn(thisPopup);
+    this.canClose = true;
   }
   reset(): void {
     this.element.html(`
@@ -78,6 +92,12 @@ class SimplePopup {
       el.find(".button").text(this.buttonText);
     }
 
+    if (this.text === "") {
+      el.find(".text").addClass("hidden");
+    } else {
+      el.find(".text").removeClass("hidden");
+    }
+
     // }
   }
 
@@ -90,7 +110,7 @@ class SimplePopup {
             <input
               type="number"
               min="1"
-              val="${input.initVal}"
+              value="${input.initVal}"
               placeholder="${input.placeholder}"
               class="${input.hidden ? "hidden" : ""}"
               ${input.hidden ? "" : "required"}
@@ -101,24 +121,46 @@ class SimplePopup {
       } else if (this.type === "text") {
         this.inputs.forEach((input) => {
           if (input.type) {
-            el.find(".inputs").append(`
+            if (input.type === "textarea") {
+              el.find(".inputs").append(`
+                <textarea
+                  placeholder="${input.placeholder}"
+                  class="${input.hidden ? "hidden" : ""}"
+                  ${input.hidden ? "" : "required"}
+                  ${input.disabled ? "disabled" : ""}
+                  autocomplete="off"
+                >${input.initVal}</textarea>
+              `);
+            } else if (input.type === "checkbox") {
+              el.find(".inputs").append(`
+                <label class="checkbox">
+                  <input type="checkbox">
+                  <div class="customTextCheckbox"></div>
+                  ${input.label}
+                </label>
+              `);
+            } else {
+              el.find(".inputs").append(`
               <input
-                type="${input.type}"
-                val="${input.initVal}"
-                placeholder="${input.placeholder}"
-                class="${input.hidden ? "hidden" : ""}"
-                ${input.hidden ? "" : "required"}
-                autocomplete="off"
+              type="${input.type}"
+              value="${input.initVal}"
+              placeholder="${input.placeholder}"
+              class="${input.hidden ? "hidden" : ""}"
+              ${input.hidden ? "" : "required"}
+              ${input.disabled ? "disabled" : ""}
+              autocomplete="off"
               >
-            `);
+              `);
+            }
           } else {
             el.find(".inputs").append(`
               <input
                 type="text"
-                val="${input.initVal}"
+                value="${input.initVal}"
                 placeholder="${input.placeholder}"
                 class="${input.hidden ? "hidden" : ""}"
                 ${input.hidden ? "" : "required"}
+                ${input.disabled ? "disabled" : ""}
                 autocomplete="off"
               >
             `);
@@ -132,28 +174,37 @@ class SimplePopup {
   }
 
   exec(): void {
+    if (!this.canClose) return;
     const vals: string[] = [];
     $.each($("#simplePopup input"), (_, el) => {
-      vals.push($(el).val() as string);
+      if ($(el).is(":checkbox")) {
+        vals.push($(el).is(":checked") ? "true" : "false");
+      } else {
+        vals.push($(el).val() as string);
+      }
     });
     this.execFn(this, ...vals);
     this.hide();
   }
 
   show(parameters: string[] = []): void {
+    activePopup = this;
     this.parameters = parameters;
-    this.beforeShowFn(this);
+    this.beforeInitFn(this);
     this.init();
+    this.beforeShowFn(this);
     this.wrapper
       .stop(true, true)
       .css("opacity", 0)
       .removeClass("hidden")
       .animate({ opacity: 1 }, 125, () => {
-        $($("#simplePopup").find("input")[0]).focus();
+        $($("#simplePopup").find("input")[0]).trigger("focus");
       });
   }
 
   hide(): void {
+    if (!this.canClose) return;
+    activePopup = null;
     this.wrapper
       .stop(true, true)
       .css("opacity", 1)
@@ -165,6 +216,7 @@ class SimplePopup {
 }
 
 export function hide(): void {
+  if (activePopup) return activePopup.hide();
   $("#simplePopupWrapper")
     .stop(true, true)
     .css("opacity", 1)
@@ -176,6 +228,7 @@ export function hide(): void {
 
 $("#simplePopupWrapper").mousedown((e) => {
   if ($(e.target).attr("id") === "simplePopupWrapper") {
+    if (activePopup) return activePopup.hide();
     $("#simplePopupWrapper")
       .stop(true, true)
       .css("opacity", 1)
@@ -266,6 +319,9 @@ list["updateEmail"] = new SimplePopup(
       thisPopup.buttonText = "";
       thisPopup.text = "Password authentication is not enabled";
     }
+  },
+  (_thisPopup) => {
+    //
   }
 );
 
@@ -338,6 +394,9 @@ list["updateName"] = new SimplePopup(
       thisPopup.inputs[0].hidden = true;
       thisPopup.buttonText = "Reauthenticate to update";
     }
+  },
+  (_thisPopup) => {
+    //
   }
 );
 
@@ -400,6 +459,9 @@ list["updatePassword"] = new SimplePopup(
       thisPopup.buttonText = "";
       thisPopup.text = "Password authentication is not enabled";
     }
+  },
+  (_thisPopup) => {
+    //
   }
 );
 
@@ -448,6 +510,9 @@ list["addPasswordAuth"] = new SimplePopup(
     }, 1000);
   },
   () => {
+    //
+  },
+  (_thisPopup) => {
     //
   }
 );
@@ -526,6 +591,9 @@ list["deleteAccount"] = new SimplePopup(
       thisPopup.inputs = [];
       thisPopup.buttonText = "Reauthenticate to delete";
     }
+  },
+  (_thisPopup) => {
+    //
   }
 );
 
@@ -566,10 +634,12 @@ list["clearTagPb"] = new SimplePopup(
     } else {
       Notifications.add("Something went wrong: " + response.message, -1);
     }
-    // console.log(`clearing for ${eval("this.parameters[0]")} ${eval("this.parameters[1]")}`);
   },
   (thisPopup) => {
     thisPopup.text = `Are you sure you want to clear PB for tag ${thisPopup.parameters[1]}?`;
+  },
+  (_thisPopup) => {
+    //
   }
 );
 
@@ -585,6 +655,9 @@ list["applyCustomFont"] = new SimplePopup(
     Settings.groups["fontFamily"]?.setValue(fontName.replace(/\s/g, "_"));
   },
   () => {
+    //
+  },
+  (_thisPopup) => {
     //
   }
 );
@@ -644,6 +717,9 @@ list["resetPersonalBests"] = new SimplePopup(
       thisPopup.inputs = [];
       thisPopup.buttonText = "Reauthenticate to reset";
     }
+  },
+  (_thisPopup) => {
+    //
   }
 );
 
@@ -661,6 +737,9 @@ list["resetSettings"] = new SimplePopup(
     // }, 1000);
   },
   () => {
+    //
+  },
+  (_thisPopup) => {
     //
   }
 );
@@ -690,16 +769,281 @@ list["unlinkDiscord"] = new SimplePopup(
   },
   () => {
     //
+  },
+  (_thisPopup) => {
+    //
   }
 );
 
-$(".pageSettings .section.discordIntegration #unlinkDiscordButton").click(
+list["generateApeKey"] = new SimplePopup(
+  "generateApeKey",
+  "text",
+  "Generate new key",
+  [
+    {
+      placeholder: "Name",
+      initVal: "",
+    },
+  ],
+  "",
+  "Generate",
+  async (_thisPopup, name) => {
+    Loader.show();
+    const response = await Ape.apeKeys.generate(name, false);
+    Loader.hide();
+
+    if (response.status !== 200) {
+      return Notifications.add(
+        "Failed to generate key: " + response.message,
+        -1
+      );
+    } else {
+      const data = response.data;
+      list["viewApeKey"].show([data.apeKey]);
+    }
+  },
+  () => {
+    //
+  },
+  (_thisPopup) => {
+    //
+  }
+);
+
+list["viewApeKey"] = new SimplePopup(
+  "viewApeKey",
+  "text",
+  "Ape Key",
+  [
+    {
+      type: "textarea",
+      disabled: true,
+      placeholder: "Key",
+      initVal: "",
+    },
+  ],
+  "This is your new Ape Key. Please keep it safe. You will only see it once!",
+  "Close",
+  (_thisPopup) => {
+    ApeKeysPopup.show();
+  },
+  (_thisPopup) => {
+    _thisPopup.inputs[0].initVal = _thisPopup.parameters[0];
+  },
+  (_thisPopup) => {
+    _thisPopup.canClose = false;
+    $("#simplePopup textarea").css("height", "110px");
+    $("#simplePopup .button").addClass("hidden");
+    setTimeout(() => {
+      _thisPopup.canClose = true;
+      $("#simplePopup .button").removeClass("hidden");
+    }, 3000);
+  }
+);
+
+list["deleteApeKey"] = new SimplePopup(
+  "deleteApeKey",
+  "text",
+  "Delete Ape Key",
+  [],
+  "Are you sure?",
+  "Delete",
+  async (_thisPopup) => {
+    Loader.show();
+    const response = await Ape.apeKeys.delete(_thisPopup.parameters[0]);
+    Loader.hide();
+
+    if (response.status !== 200) {
+      return Notifications.add("Failed to delete key: " + response.message, -1);
+    }
+
+    Notifications.add("Key deleted", 1);
+    ApeKeysPopup.show();
+  },
+  (_thisPopup) => {
+    //
+  },
+  (_thisPopup) => {
+    //
+  }
+);
+
+list["editApeKey"] = new SimplePopup(
+  "editApeKey",
+  "text",
+  "Edit Ape Key",
+  [
+    {
+      placeholder: "Name",
+      initVal: "",
+    },
+  ],
+  "",
+  "Edit",
+  async (_thisPopup, input) => {
+    Loader.show();
+    const response = await Ape.apeKeys.update(_thisPopup.parameters[0], {
+      name: input,
+    });
+    Loader.hide();
+
+    if (response.status !== 200) {
+      return Notifications.add("Failed to update key: " + response.message, -1);
+    }
+
+    Notifications.add("Key updated", 1);
+    ApeKeysPopup.show();
+  },
+  (_thisPopup) => {
+    //
+  },
+  (_thisPopup) => {
+    //
+  }
+);
+
+list["saveCustomText"] = new SimplePopup(
+  "saveCustomText",
+  "text",
+  "Save custom text",
+  [
+    {
+      placeholder: "Name",
+      initVal: "",
+    },
+  ],
+  "",
+  "Save",
+  (_thisPopup, input) => {
+    const text = ($(`#customTextPopup textarea`).val() as string).normalize();
+    CustomText.setCustomText(input, text);
+    Notifications.add("Custom text saved", 1);
+    CustomTextPopup.show();
+  },
+  () => {
+    //
+  },
+  () => {
+    //
+  }
+);
+
+list["deleteCustomText"] = new SimplePopup(
+  "deleteCustomText",
+  "text",
+  "Delete custom text",
+  [],
+  "Are you sure?",
+  "Delete",
+  (_thisPopup) => {
+    CustomText.deleteCustomText(_thisPopup.parameters[0]);
+    Notifications.add("Custom text deleted", 1);
+    SavedTextsPopup.show();
+  },
+  (_thisPopup) => {
+    _thisPopup.text = `Are you sure you want to delete custom text ${_thisPopup.parameters[0]}?`;
+  },
+  () => {
+    //
+  }
+);
+
+list["updateCustomTheme"] = new SimplePopup(
+  "updateCustomTheme",
+  "text",
+  "Update Custom Theme",
+  [
+    {
+      type: "text",
+      placeholder: "Name",
+      initVal: "",
+    },
+    {
+      type: "checkbox",
+      initVal: "false",
+      label: "Update custom theme to current colors",
+    },
+  ],
+  "",
+  "Update",
+  async (_thisPopup, name, updateColors) => {
+    const snapshot = DB.getSnapshot();
+
+    const customTheme = snapshot.customThemes.find(
+      (t) => t._id === _thisPopup.parameters[0]
+    );
+    if (customTheme === undefined) {
+      Notifications.add("Custom theme does not exist!", -1);
+      return;
+    }
+
+    let newColors: string[] = [];
+    if (updateColors === "true") {
+      $.each(
+        $(".pageSettings .customTheme .customThemeEdit [type='color']"),
+        (_index, element) => {
+          newColors.push($(element).attr("value") as string);
+        }
+      );
+    } else {
+      newColors = customTheme.colors;
+    }
+
+    const newTheme = {
+      name: name,
+      colors: newColors,
+    };
+    Loader.show();
+    await DB.editCustomTheme(customTheme._id, newTheme);
+    Loader.hide();
+    UpdateConfig.setCustomThemeColors(newColors);
+    Notifications.add("Custom theme updated", 1);
+    ThemePicker.refreshButtons();
+  },
+  (_thisPopup) => {
+    const snapshot = DB.getSnapshot();
+
+    const customTheme = snapshot.customThemes.find(
+      (t) => t._id === _thisPopup.parameters[0]
+    );
+    if (!customTheme) return;
+    _thisPopup.inputs[0].initVal = customTheme.name;
+  },
+  (_thisPopup) => {
+    //
+  }
+);
+
+list["deleteCustomTheme"] = new SimplePopup(
+  "deleteCustomTheme",
+  "text",
+  "Delete Custom Theme",
+  [],
+  "Are you sure?",
+  "Delete",
+  async (_thisPopup) => {
+    Loader.show();
+    await DB.deleteCustomTheme(_thisPopup.parameters[0]);
+    Loader.hide();
+    Notifications.add("Custom theme deleted", 1);
+    ThemePicker.refreshButtons();
+  },
+  (_thisPopup) => {
+    //
+  },
+  (_thisPopup) => {
+    //
+  }
+);
+
+$(".pageSettings .section.discordIntegration #unlinkDiscordButton").on(
+  "click",
   () => {
     list["unlinkDiscord"].show();
   }
 );
 
-$("#resetSettingsButton").click(() => {
+$("#resetSettingsButton").on("click", () => {
   list["resetSettings"].show();
 });
 
@@ -727,6 +1071,53 @@ $(".pageSettings #deleteAccount").on("click", () => {
   list["deleteAccount"].show();
 });
 
+$("#apeKeysPopup .generateApeKey").on("click", () => {
+  list["generateApeKey"].show();
+});
+
+$(`#customTextPopup .buttonsTop .saveCustomText`).on("click", () => {
+  list["saveCustomText"].show();
+});
+
+$(document).on(
+  "click",
+  ".pageSettings .section.themes .customTheme .delButton",
+  (e) => {
+    const $parentElement = $(e.currentTarget).parent(".customTheme.button");
+    const customThemeId = $parentElement.attr("customThemeId") as string;
+    list["deleteCustomTheme"].show([customThemeId]);
+  }
+);
+
+$(document).on(
+  "click",
+  ".pageSettings .section.themes .customTheme .editButton",
+  (e) => {
+    const $parentElement = $(e.currentTarget).parent(".customTheme.button");
+    const customThemeId = $parentElement.attr("customThemeId") as string;
+    list["updateCustomTheme"].show([customThemeId]);
+  }
+);
+
+$(document).on(
+  "click",
+  `#savedTextsPopupWrapper .list .savedText .button.delete`,
+  (e) => {
+    const name = $(e.target).siblings(".button.name").text();
+    list["deleteCustomText"].show([name]);
+  }
+);
+
+$(document).on("click", "#apeKeysPopup table tbody tr .button.delete", (e) => {
+  const keyId = $(e.target).closest("tr").attr("keyId") as string;
+  list["deleteApeKey"].show([keyId]);
+});
+
+$(document).on("click", "#apeKeysPopup table tbody tr .button.edit", (e) => {
+  const keyId = $(e.target).closest("tr").attr("keyId") as string;
+  list["editApeKey"].show([keyId]);
+});
+
 $(document).on(
   "click",
   ".pageSettings .section.fontFamily .button.custom",
@@ -735,7 +1126,7 @@ $(document).on(
   }
 );
 
-$(document).keydown((event) => {
+$(document).on("keydown", (event) => {
   if (event.key === "Escape" && !$("#simplePopupWrapper").hasClass("hidden")) {
     hide();
     event.preventDefault();
