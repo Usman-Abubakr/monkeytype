@@ -1,6 +1,6 @@
 import Config, * as UpdateConfig from "../config";
 import * as ThemeController from "../controllers/theme-controller";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as Notifications from "../elements/notifications";
 import * as ThemeColors from "../elements/theme-colors";
 import * as ChartController from "../controllers/chart-controller";
@@ -8,6 +8,7 @@ import * as CustomThemePopup from "../popups/custom-theme-popup";
 import * as Loader from "../elements/loader";
 import * as DB from "../db";
 import * as ConfigEvent from "../observables/config-event";
+import { Auth } from "../firebase";
 
 export function updateActiveButton(): void {
   let activeThemeName = Config.theme;
@@ -33,13 +34,15 @@ function updateColors(
   if (onlyStyle) {
     const colorID = colorPicker.find("input[type=color]").attr("id");
     if (colorID === undefined) console.error("Could not find color ID!");
-    if (!noThemeUpdate && colorID !== undefined)
+    if (!noThemeUpdate && colorID !== undefined) {
       document.documentElement.style.setProperty(colorID, color);
+    }
     const pickerButton = colorPicker.find("label");
     pickerButton.val(color);
     pickerButton.attr("value", color);
-    if (pickerButton.attr("for") !== "--bg-color")
+    if (pickerButton.attr("for") !== "--bg-color") {
       pickerButton.css("background-color", color);
+    }
     colorPicker.find("input[type=text]").val(color);
     colorPicker.find("input[type=color]").attr("value", color);
     return;
@@ -84,15 +87,17 @@ function updateColors(
   const colorID = colorPicker.find("input[type=color]").attr("id");
 
   if (colorID === undefined) console.error("Could not find color ID!");
-  if (!noThemeUpdate && colorID !== undefined)
+  if (!noThemeUpdate && colorID !== undefined) {
     document.documentElement.style.setProperty(colorID, color);
+  }
 
   const pickerButton = colorPicker.find("label");
 
   pickerButton.val(color);
   pickerButton.attr("value", color);
-  if (pickerButton.attr("for") !== "--bg-color")
+  if (pickerButton.attr("for") !== "--bg-color") {
     pickerButton.css("background-color", color);
+  }
   colorPicker.find("input[type=text]").val(color);
   colorPicker.find("input[type=color]").attr("value", color);
 }
@@ -105,7 +110,7 @@ export async function refreshButtons(): Promise<void> {
     ).empty();
     const addButton = $(".pageSettings .section.themes .addCustomThemeButton");
 
-    if (firebase.auth().currentUser === null) {
+    if (Auth.currentUser === null) {
       $(
         ".pageSettings .section.themes .customThemeEdit .saveCustomThemeButton"
       ).text("save");
@@ -217,7 +222,6 @@ function toggleFavourite(themeName: string): void {
     UpdateConfig.setFavThemes(newList);
   }
   UpdateConfig.saveFullConfigToLocalStorage();
-  refreshButtons();
 }
 
 export function saveCustomThemeColors(): void {
@@ -248,12 +252,22 @@ export function updateActiveTab(forced = false): void {
       $customTabButton.addClass("active");
       refreshButtons();
     }
+    Misc.swapElements(
+      $('.pageSettings [tabContent="preset"]'),
+      $('.pageSettings [tabContent="custom"]'),
+      250
+    );
   } else {
     $customTabButton.removeClass("active");
     if (!$presetTabButton.hasClass("active") || forced) {
       $presetTabButton.addClass("active");
       refreshButtons();
     }
+    Misc.swapElements(
+      $('.pageSettings [tabContent="custom"]'),
+      $('.pageSettings [tabContent="preset"]'),
+      250
+    );
   }
 }
 
@@ -264,7 +278,7 @@ $(".pageSettings .section.themes .tabs .button").on("click", (e) => {
   $(".pageSettings .section.themes .tabs .button").removeClass("active");
   const $target = $(e.currentTarget);
   $target.addClass("active");
-  setCustomInputs();
+  // setCustomInputs();
   if ($target.attr("tab") == "preset") {
     UpdateConfig.setCustomTheme(false);
   } else {
@@ -292,10 +306,11 @@ $(document).on(
   (e) => {
     const theme = $(e.currentTarget).parents(".theme.button").attr("theme");
     if (theme !== undefined) toggleFavourite(theme);
-    else
+    else {
       console.error(
         "Could not find the theme attribute attached to the button clicked!"
       );
+    }
   }
 );
 
@@ -411,7 +426,7 @@ $("#shareCustomThemeButton").on("click", () => {
 
 $(".pageSettings .saveCustomThemeButton").on("click", async () => {
   saveCustomThemeColors();
-  if (firebase.auth().currentUser) {
+  if (Auth.currentUser) {
     const newCustomTheme = {
       name: "custom",
       colors: Config.customThemeColors,

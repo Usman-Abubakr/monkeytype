@@ -2,7 +2,8 @@ import Ape from "../ape";
 import * as TestUI from "./test-ui";
 import * as ManualRestart from "./manual-restart-tracker";
 import Config, * as UpdateConfig from "../config";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
+import QuotesController from "../controllers/quotes-controller";
 import * as Notifications from "../elements/notifications";
 import * as CustomText from "./custom-text";
 import * as TestStats from "./test-stats";
@@ -48,9 +49,9 @@ import * as ConfigEvent from "../observables/config-event";
 import * as TimerEvent from "../observables/timer-event";
 import * as Last10Average from "../elements/last-10-average";
 import * as Monkey from "./monkey";
-import NodeObjectHash from "node-object-hash";
-
-const objecthash = NodeObjectHash().hash;
+import objectHash from "object-hash";
+import * as AnalyticsController from "../controllers/analytics-controller";
+import { Auth } from "../firebase";
 
 let failReason = "";
 
@@ -65,7 +66,7 @@ export function setNotSignedInUid(uid: string): void {
   if (notSignedInLastResult === null) return;
   notSignedInLastResult.uid = uid;
   delete notSignedInLastResult.hash;
-  notSignedInLastResult.hash = objecthash(notSignedInLastResult);
+  notSignedInLastResult.hash = objectHash(notSignedInLastResult);
 }
 
 let spanishSentenceTracker = "";
@@ -227,7 +228,7 @@ export function punctuateWord(
     } else if (Math.random() < 0.25 && currentLanguage == "code") {
       const specials = ["{", "}", "[", "]", "(", ")", ";", "=", "+", "%", "/"];
 
-      word = specials[Math.floor(Math.random() * 10)];
+      word = Misc.randomElementFromArray(specials);
     }
   }
   return word;
@@ -240,14 +241,11 @@ export function startTest(): boolean {
   if (!UpdateConfig.dbConfigLoaded) {
     UpdateConfig.setChangedBeforeDb(true);
   }
-  try {
-    if (firebase.auth().currentUser != null) {
-      firebase.analytics().logEvent("testStarted");
-    } else {
-      firebase.analytics().logEvent("testStartedNoLogin");
-    }
-  } catch (e) {
-    console.log("Analytics unavailable");
+
+  if (Auth.currentUser !== null) {
+    AnalyticsController.log("testStarted");
+  } else {
+    AnalyticsController.log("testStartedNoLogin");
   }
   TestActive.set(true);
   Replay.startReplayRecording();
@@ -272,8 +270,9 @@ export function startTest(): boolean {
     if (
       Config.paceCaret !== "off" ||
       (Config.repeatedPace && TestState.isPaceRepeat)
-    )
+    ) {
       PaceCaret.start();
+    }
   } catch (e) {}
   //use a recursive self-adjusting timer to avoid time drift
   TestStats.setStart(performance.now());
@@ -307,8 +306,9 @@ export function restart(
         )
       ) {
         let message = "Use your mouse to confirm.";
-        if (Config.quickTab)
+        if (Config.quickTab) {
           message = "Press shift + tab or use your mouse to confirm.";
+        }
         Notifications.add("Quick restart disabled. " + message, 0, 3);
         return;
       }
@@ -350,10 +350,12 @@ export function restart(
     !practiseMissed
   ) {
     Notifications.add("Reverting to previous settings.", 0);
-    if (PractiseWords.before.punctuation !== null)
+    if (PractiseWords.before.punctuation !== null) {
       UpdateConfig.setPunctuation(PractiseWords.before.punctuation);
-    if (PractiseWords.before.numbers !== null)
+    }
+    if (PractiseWords.before.numbers !== null) {
       UpdateConfig.setNumbers(PractiseWords.before.numbers);
+    }
     UpdateConfig.setMode(PractiseWords.before.mode);
     PractiseWords.resetBefore();
   }
@@ -381,13 +383,14 @@ export function restart(
   PaceCaret.reset();
   Monkey.hide();
 
-  if (Config.showAvg) Last10Average.update();
+  if (Config.showAverage) Last10Average.update();
   $("#showWordHistoryButton").removeClass("loaded");
   $("#restartTestButton").blur();
   Funbox.resetMemoryTimer();
   QuoteRatePopup.clearQuoteStats();
-  if (ActivePage.get() == "test" && window.scrollY > 0)
+  if (ActivePage.get() == "test" && window.scrollY > 0) {
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   $("#wordsInput").val(" ");
 
   TestUI.reset();
@@ -572,8 +575,9 @@ export function restart(
             // resetPaceCaret();
             PbCrown.hide();
             TestTimer.clear();
-            if ($("#commandLineWrapper").hasClass("hidden"))
+            if ($("#commandLineWrapper").hasClass("hidden")) {
               TestUI.focusWords();
+            }
             // ChartController.result.update();
             PageTransition.set(false);
             // console.log(TestStats.incompleteSeconds);
@@ -650,7 +654,7 @@ async function getNextWord(
   } else if (
     Config.mode == "custom" &&
     (CustomText.isWordRandom || CustomText.isTimeRandom) &&
-    (wordset.length < 3 || PractiseWords.before.mode !== null)
+    (wordset.length < 4 || PractiseWords.before.mode !== null)
   ) {
     randomWord = wordset.randomWord();
   } else {
@@ -875,18 +879,19 @@ export async function init(): Promise<void> {
         }
       }
     }
-  } else if (Config.mode == "quote") {
-    // setLanguage(Config.language.replace(/_\d*k$/g, ""), true);
+  } else if (Config.mode === "quote") {
+    const quotesCollection = await QuotesController.getQuotes(
+      Config.language,
+      Config.quoteLength
+    );
 
-    const quotes = await Misc.getQuotes(Config.language.replace(/_\d*k$/g, ""));
-
-    if (quotes.length === 0) {
+    if (quotesCollection.length === 0) {
       TestUI.setTestRestarting(false);
       Notifications.add(
         `No ${Config.language.replace(/_\d*k$/g, "")} quotes found`,
         0
       );
-      if (firebase.auth().currentUser) {
+      if (Auth.currentUser) {
         QuoteSubmitPopup.show(false);
       }
       UpdateConfig.setMode("words");
@@ -896,49 +901,24 @@ export async function init(): Promise<void> {
 
     let rq: MonkeyTypes.Quote | undefined = undefined;
     if (Config.quoteLength.includes(-2) && Config.quoteLength.length == 1) {
-      quotes.groups.forEach((group) => {
-        const filtered = (<MonkeyTypes.Quote[]>group).filter(
-          (quote) => quote.id == QuoteSearchPopup.selectedId
-        );
-        if (filtered.length > 0) {
-          rq = filtered[0];
-        }
-      });
-      if (rq === undefined) {
-        rq = <MonkeyTypes.Quote>quotes.groups[0][0];
+      const targetQuote = QuotesController.getQuoteById(
+        QuoteSearchPopup.selectedId
+      );
+      if (targetQuote === undefined) {
+        rq = <MonkeyTypes.Quote>quotesCollection.groups[0][0];
         Notifications.add("Quote Id Does Not Exist", 0);
+      } else {
+        rq = targetQuote;
       }
     } else {
-      const quoteLengths = Config.quoteLength;
-      let groupIndex;
-      if (quoteLengths.length > 1) {
-        groupIndex =
-          quoteLengths[Math.floor(Math.random() * quoteLengths.length)];
-        while (quotes.groups[groupIndex].length === 0) {
-          groupIndex =
-            quoteLengths[Math.floor(Math.random() * quoteLengths.length)];
-        }
-      } else {
-        groupIndex = quoteLengths[0];
-        if (quotes.groups[groupIndex].length === 0) {
-          Notifications.add("No quotes found for selected quote length", 0);
-          TestUI.setTestRestarting(false);
-          return;
-        }
+      const randomQuote = QuotesController.getRandomQuote();
+      if (randomQuote === null) {
+        Notifications.add("No quotes found for selected quote length", 0);
+        TestUI.setTestRestarting(false);
+        return;
       }
 
-      rq = quotes.groups[groupIndex][
-        Math.floor(Math.random() * quotes.groups[groupIndex].length)
-      ] as MonkeyTypes.Quote;
-      if (
-        TestWords.randomQuote != null &&
-        typeof rq !== "number" &&
-        rq.id === TestWords.randomQuote.id
-      ) {
-        rq = quotes.groups[groupIndex][
-          Math.floor(Math.random() * quotes.groups[groupIndex].length)
-        ] as MonkeyTypes.Quote;
-      }
+      rq = randomQuote;
     }
 
     if (rq === undefined) return;
@@ -1035,8 +1015,9 @@ export async function addWord(): Promise<void> {
       TestWords.words.length >= CustomText.text.length) ||
     (Config.mode === "quote" &&
       TestWords.words.length >= (TestWords.randomQuote.textSplit?.length ?? 0))
-  )
+  ) {
     return;
+  }
 
   if (Config.funbox === "wikipedia" || Config.funbox == "poetry") {
     if (TestWords.words.length - TestWords.words.currentIndex < 20) {
@@ -1157,11 +1138,7 @@ export async function retrySavingResult(): Promise<void> {
     started: TestStats.restartCount + 1,
   });
 
-  try {
-    firebase.analytics().logEvent("testCompleted", completedEvent);
-  } catch (e) {
-    console.log("Analytics unavailable");
-  }
+  AnalyticsController.log("testCompleted");
 
   if (response.data.isPb) {
     //new pb
@@ -1259,11 +1236,12 @@ function buildCompletedEvent(difficultyFailed: boolean): CompletedEvent {
     TestInput.keypressTimings.spacing.array === "toolong"
       ? []
       : TestInput.keypressTimings.spacing.array.slice();
-  if (keyConsistencyArray.length > 0)
+  if (keyConsistencyArray.length > 0) {
     keyConsistencyArray = keyConsistencyArray.slice(
       0,
       keyConsistencyArray.length - 1
     );
+  }
   let keyConsistency = Misc.roundTo2(
     Misc.kogasa(
       Misc.stdDev(keyConsistencyArray) / Misc.mean(keyConsistencyArray)
@@ -1452,21 +1430,17 @@ export async function finish(difficultyFailed = false): Promise<void> {
     Result.updateTodayTracker();
   }
 
-  if (firebase.auth().currentUser == null) {
+  if (Auth.currentUser == null) {
     $(".pageTest #result #rateQuoteButton").addClass("hidden");
     $(".pageTest #result #reportQuoteButton").addClass("hidden");
-    try {
-      firebase.analytics().logEvent("testCompletedNoLogin", completedEvent);
-    } catch (e) {
-      console.log("Analytics unavailable");
-    }
+    AnalyticsController.log("testCompletedNoLogin");
     if (!dontSave) notSignedInLastResult = completedEvent;
     dontSave = true;
   } else {
     $(".pageTest #result #reportQuoteButton").removeClass("hidden");
   }
 
-  Result.update(
+  await Result.update(
     completedEvent,
     difficultyFailed,
     failReason,
@@ -1477,8 +1451,9 @@ export async function finish(difficultyFailed = false): Promise<void> {
     dontSave
   );
 
-  if (completedEvent.chartData !== "toolong")
+  if (completedEvent.chartData !== "toolong") {
     delete completedEvent.chartData.unsmoothedRaw;
+  }
 
   if (completedEvent.testDuration > 122) {
     completedEvent.chartData = "toolong";
@@ -1488,11 +1463,7 @@ export async function finish(difficultyFailed = false): Promise<void> {
   }
 
   if (dontSave) {
-    try {
-      firebase.analytics().logEvent("testCompletedInvalid", completedEvent);
-    } catch (e) {
-      console.log("Analytics unavailable");
-    }
+    AnalyticsController.log("testCompletedInvalid");
     return;
   }
 
@@ -1506,21 +1477,21 @@ export async function finish(difficultyFailed = false): Promise<void> {
     TestStats.resetIncomplete();
   }
 
-  completedEvent.uid = firebase.auth().currentUser.uid;
+  completedEvent.uid = Auth.currentUser?.uid as string;
   Result.updateRateQuote(TestWords.randomQuote);
-
-  Result.updateGraphPBLine();
 
   AccountButton.loading(true);
   completedEvent.challenge = ChallengeContoller.verify(completedEvent);
   if (completedEvent.challenge === null) delete completedEvent?.challenge;
-  completedEvent.hash = objecthash(completedEvent);
+
+  completedEvent.hash = objectHash(completedEvent);
 
   const response = await Ape.results.save(completedEvent);
 
   AccountButton.loading(false);
 
   if (response.status !== 200) {
+    console.log("Error saving result", completedEvent);
     $("#retrySavingResultButton").removeClass("hidden");
     if (response.message === "Incorrect result hash") {
       console.log(completedEvent);
@@ -1546,11 +1517,7 @@ export async function finish(difficultyFailed = false): Promise<void> {
     started: TestStats.restartCount + 1,
   });
 
-  try {
-    firebase.analytics().logEvent("testCompleted", completedEvent);
-  } catch (e) {
-    console.log("Analytics unavailable");
-  }
+  AnalyticsController.log("testCompleted");
 
   if (response.data.isPb) {
     //new pb
@@ -1746,8 +1713,9 @@ ConfigEvent.subscribe((eventKey, eventValue, nosave) => {
   if (eventKey === "difficulty" && !nosave) restart(false, nosave);
   if (eventKey === "showAllLines" && !nosave) restart();
   if (eventKey === "keymapMode" && !nosave) restart(false, nosave);
-  if (eventKey === "lazyMode" && eventValue === false && !nosave)
+  if (eventKey === "lazyMode" && eventValue === false && !nosave) {
     rememberLazyMode = false;
+  }
 });
 
 TimerEvent.subscribe((eventKey, eventValue) => {

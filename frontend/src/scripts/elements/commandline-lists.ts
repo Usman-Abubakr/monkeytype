@@ -1,5 +1,5 @@
 import * as DB from "../db";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as Notifications from "./notifications";
 import * as Sound from "../controllers/sound-controller";
 import * as ThemeController from "../controllers/theme-controller";
@@ -19,6 +19,7 @@ import * as PaceCaret from "../test/pace-caret";
 import * as TestInput from "../test/test-input";
 import * as ModesNotice from "../elements/modes-notice";
 import * as ConfigEvent from "../observables/config-event";
+import { Auth } from "../firebase";
 
 export let current: MonkeyTypes.CommandsGroup[] = [];
 
@@ -356,24 +357,40 @@ const commandsLiveWpm: MonkeyTypes.CommandsGroup = {
   ],
 };
 
-const commandsShowAvg: MonkeyTypes.CommandsGroup = {
+const commandsShowAverage: MonkeyTypes.CommandsGroup = {
   title: "Show average...",
-  configKey: "showAvg",
+  configKey: "showAverage",
   list: [
     {
-      id: "setAvgOff",
+      id: "setShowAverageOff",
       display: "off",
-      configValue: false,
+      configValue: "off",
       exec: (): void => {
-        UpdateConfig.setShowAvg(false);
+        UpdateConfig.setShowAverage("off");
       },
     },
     {
-      id: "setAvgOn",
-      display: "on",
-      configValue: true,
+      id: "setShowAverageSpeed",
+      display: "wpm",
+      configValue: "wpm",
       exec: (): void => {
-        UpdateConfig.setShowAvg(true);
+        UpdateConfig.setShowAverage("wpm");
+      },
+    },
+    {
+      id: "setShowAverageAcc",
+      display: "accuracy",
+      configValue: "acc",
+      exec: (): void => {
+        UpdateConfig.setShowAverage("acc");
+      },
+    },
+    {
+      id: "setShowAverageBoth",
+      display: "both",
+      configValue: "both",
+      exec: (): void => {
+        UpdateConfig.setShowAverage("both");
       },
     },
   ],
@@ -1152,7 +1169,7 @@ const commandsRandomTheme: MonkeyTypes.CommandsGroup = {
       display: "custom",
       configValue: "custom",
       exec: (): void => {
-        if (firebase.auth().currentUser === null) {
+        if (Auth.currentUser === null) {
           Notifications.add(
             "Multiple custom themes are available to logged in users only",
             0
@@ -1257,11 +1274,15 @@ export const customThemeListCommands: MonkeyTypes.CommandsGroup = {
 };
 
 export function updateCustomThemeListCommands(): void {
-  if (firebase.auth().currentUser === null) {
+  if (Auth.currentUser === null) {
     return;
   }
 
   customThemeListCommands.list = [];
+
+  const snapshot = DB.getSnapshot();
+
+  if (!snapshot) return;
 
   if (DB.getSnapshot().customThemes.length < 0) {
     Notifications.add("You need to create a custom theme first", 0);
@@ -2857,7 +2878,7 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       subgroup: customThemeListCommands,
       beforeSubgroup: (): void => updateCustomThemeListCommands(),
       available: (): boolean => {
-        return firebase.auth().currentUser !== null;
+        return Auth.currentUser !== null;
       },
     },
     {
@@ -2927,10 +2948,10 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       subgroup: commandsHighlightMode,
     },
     {
-      id: "changeShowAvg",
+      id: "changeShowAverage",
       display: "Show average...",
-      icon: "fa-tachometer-alt",
-      subgroup: commandsShowAvg,
+      icon: "fa-chart-bar",
+      subgroup: commandsShowAverage,
     },
     {
       id: "changeCustomBackground",
@@ -3070,6 +3091,16 @@ export const defaultCommands: MonkeyTypes.CommandsGroup = {
       exec: (): void => {
         $("#top #menu .icon-button.view-settings").trigger("click");
       },
+    },
+    {
+      id: "viewQuoteSearchPopup",
+      display: "Search for quotes",
+      icon: "fa-search",
+      exec: (): void => {
+        UpdateConfig.setMode("quote");
+        $("#quote-search-button").trigger("click");
+      },
+      shouldFocusTestUI: false,
     },
     {
       id: "viewAccount",
@@ -3281,7 +3312,7 @@ const listsObject = {
   commandsDifficulty,
   commandsLazyMode,
   commandsPaceCaret,
-  commandsShowAvg,
+  commandsShowAverage,
   commandsMinWpm,
   commandsMinAcc,
   commandsMinBurst,

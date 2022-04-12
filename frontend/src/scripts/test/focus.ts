@@ -1,6 +1,7 @@
 import * as Caret from "./caret";
 import * as ActivePage from "../states/active-page";
 
+const unfocusPx = 3;
 let state = false;
 
 export function set(foc: boolean, withCursor = false): void {
@@ -11,6 +12,7 @@ export function set(foc: boolean, withCursor = false): void {
     $("#bottom").addClass("focus");
     if (!withCursor) $("body").css("cursor", "none");
     $("#middle").addClass("focus");
+    $("#bannerCenter").addClass("focus");
   } else if (!foc && state) {
     state = false;
     Caret.startAnimation();
@@ -18,6 +20,7 @@ export function set(foc: boolean, withCursor = false): void {
     $("#bottom").removeClass("focus");
     $("body").css("cursor", "default");
     $("#middle").removeClass("focus");
+    $("#bannerCenter").removeClass("focus");
   }
 }
 
@@ -28,7 +31,9 @@ $(document).mousemove(function (event) {
   if (
     $("#top").hasClass("focus") &&
     event.originalEvent &&
-    (event.originalEvent.movementX > 0 || event.originalEvent.movementY > 0)
+    // To avoid mouse/desk vibration from creating a flashy effect, we'll unfocus @ >5px instead of >0px
+    (event.originalEvent.movementX > unfocusPx ||
+      event.originalEvent.movementY > unfocusPx)
   ) {
     set(false);
   }

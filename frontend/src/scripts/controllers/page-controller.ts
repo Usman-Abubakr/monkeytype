@@ -1,4 +1,4 @@
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as ActivePage from "../states/active-page";
 import * as Settings from "../pages/settings";
 import * as Account from "../pages/account";
@@ -9,7 +9,7 @@ import * as PageLogin from "../pages/login";
 import * as PageLoading from "../pages/loading";
 import * as PageTransition from "../states/page-transition";
 
-export function change(page: MonkeyTypes.Page | ""): void {
+export function change(page?: MonkeyTypes.Page | ""): void {
   if (PageTransition.get()) {
     console.log(`change page ${page} stopped`);
     return;

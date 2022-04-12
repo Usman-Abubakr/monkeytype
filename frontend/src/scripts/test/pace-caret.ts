@@ -4,7 +4,7 @@ import * as TestUI from "./test-ui";
 import Config from "../config";
 import * as DB from "../db";
 import * as SlowTimer from "../states/slow-timer";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as TestActive from "../states/test-active";
 import * as TestState from "./test-state";
 import * as ConfigEvent from "../observables/config-event";
@@ -66,7 +66,7 @@ export async function init(): Promise<void> {
       Config.funbox
     );
   } else if (Config.paceCaret === "average") {
-    wpm = await DB.getUserAverageWpm10(
+    [wpm] = await DB.getUserAverage10(
       Config.mode,
       mode2,
       Config.punctuation,
@@ -106,9 +106,10 @@ export function update(expectedStepEnd: number): void {
   if (settings === null || !TestActive.get() || TestUI.resultVisible) {
     return;
   }
-  if ($("#paceCaret").hasClass("hidden")) {
-    $("#paceCaret").removeClass("hidden");
-  }
+  // if ($("#paceCaret").hasClass("hidden")) {
+  //   $("#paceCaret").removeClass("hidden");
+  // }
+
   try {
     settings.currentLetterIndex++;
     if (
@@ -179,8 +180,9 @@ export function update(expectedStepEnd: number): void {
         currentLetterHeight === undefined ||
         currentLetterWidth === undefined ||
         caretWidth === undefined
-      )
+      ) {
         throw ``;
+      }
 
       newTop = currentLetter.offsetTop - currentLetterHeight / 5;
       newLeft;
@@ -195,33 +197,33 @@ export function update(expectedStepEnd: number): void {
       caret.addClass("hidden");
     }
 
-    if (newTop === undefined) return;
-
-    let smoothlinescroll = $("#words .smoothScroller").height();
-    if (smoothlinescroll === undefined) smoothlinescroll = 0;
-
-    $("#paceCaret").css({
-      top: newTop - smoothlinescroll,
-    });
-
     const duration = expectedStepEnd - performance.now();
 
-    if (Config.smoothCaret) {
-      caret.stop(true, true).animate(
-        {
-          left: newLeft,
-        },
-        SlowTimer.get() ? 0 : duration,
-        "linear"
-      );
-    } else {
-      caret.stop(true, true).animate(
-        {
-          left: newLeft,
-        },
-        0,
-        "linear"
-      );
+    if (newTop !== undefined) {
+      let smoothlinescroll = $("#words .smoothScroller").height();
+      if (smoothlinescroll === undefined) smoothlinescroll = 0;
+
+      $("#paceCaret").css({
+        top: newTop - smoothlinescroll,
+      });
+
+      if (Config.smoothCaret) {
+        caret.stop(true, true).animate(
+          {
+            left: newLeft,
+          },
+          SlowTimer.get() ? 0 : duration,
+          "linear"
+        );
+      } else {
+        caret.stop(true, true).animate(
+          {
+            left: newLeft,
+          },
+          0,
+          "linear"
+        );
+      }
     }
     settings.timeout = setTimeout(() => {
       try {
@@ -237,8 +239,9 @@ export function update(expectedStepEnd: number): void {
 }
 
 export function reset(): void {
-  if (settings !== null && settings.timeout !== null)
+  if (settings !== null && settings.timeout !== null) {
     clearTimeout(settings.timeout);
+  }
   settings = null;
 }
 

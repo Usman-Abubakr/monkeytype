@@ -8,9 +8,11 @@ import * as CustomText from "./custom-text";
 import * as Caret from "./caret";
 import * as OutOfFocus from "./out-of-focus";
 import * as Replay from "./replay";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as SlowTimer from "../states/slow-timer";
 import * as ConfigEvent from "../observables/config-event";
+import format from "date-fns/format";
+import { Auth } from "../firebase";
 
 ConfigEvent.subscribe((eventKey, eventValue) => {
   if (eventValue === undefined || typeof eventValue !== "boolean") return;
@@ -211,24 +213,26 @@ export async function screenshot(): Promise<void> {
     $(".pageTest .ssWatermark").text("monkeytype.com");
     $(".pageTest .buttons").removeClass("hidden");
     if (revealReplay) $("#resultReplay").removeClass("hidden");
-    if (firebase.auth().currentUser == null)
+    if (Auth.currentUser == null) {
       $(".pageTest .loginTip").removeClass("hidden");
+    }
   }
 
   if (!$("#resultReplay").hasClass("hidden")) {
     revealReplay = true;
     Replay.pauseReplay();
   }
+  const dateNow = new Date(Date.now());
   $("#resultReplay").addClass("hidden");
   $(".pageTest .ssWatermark").removeClass("hidden");
   $(".pageTest .ssWatermark").text(
-    moment(Date.now()).format("DD MMM YYYY HH:mm") + " | monkeytype.com "
+    format(dateNow, "dd MMM yyyy HH:mm") + " | monkeytype.com "
   );
-  if (firebase.auth().currentUser != null) {
+  if (Auth.currentUser != null) {
     $(".pageTest .ssWatermark").text(
       DB.getSnapshot().name +
         " | " +
-        moment(Date.now()).format("DD MMM YYYY HH:mm") +
+        format(dateNow, "dd MMM yyyy HH:mm") +
         " | monkeytype.com  "
     );
   }
@@ -370,8 +374,9 @@ export function updateWordElement(showError = !Config.blindMode): void {
       if (
         Misc.trailingComposeChars.test(input) &&
         i > input.search(Misc.trailingComposeChars)
-      )
+      ) {
         continue;
+      }
 
       if (charCorrect) {
         ret += `<letter class="${
@@ -828,7 +833,7 @@ $(document).on("mouseenter", "#resultWordsHistory .words .word", (e) => {
   if (resultVisible) {
     const input = $(e.currentTarget).attr("input");
     const burst = parseInt(<string>$(e.currentTarget).attr("burst"));
-    if (input != undefined)
+    if (input != undefined) {
       $(e.currentTarget).append(
         `<div class="wordInputAfter">
           <div class="text">
@@ -845,6 +850,7 @@ $(document).on("mouseenter", "#resultWordsHistory .words .word", (e) => {
           </div>
           </div>`
       );
+    }
   }
 });
 

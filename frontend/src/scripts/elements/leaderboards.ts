@@ -1,8 +1,10 @@
 import Ape from "../ape";
 import * as DB from "../db";
 import Config from "../config";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as Notifications from "./notifications";
+import format from "date-fns/format";
+import { Auth } from "../firebase";
 
 const currentLeaderboard = "time_15";
 
@@ -61,7 +63,7 @@ function stopTimer(): void {
 
 function updateTimerElement(): void {
   const date = new Date();
-  const minutesToNextUpdate = 4 - (date.getMinutes() % 5);
+  const minutesToNextUpdate = 14 - (date.getMinutes() % 15);
   const secondsToNextUpdate = 60 - date.getSeconds();
   const totalSeconds = minutesToNextUpdate * 60 + secondsToNextUpdate;
   $("#leaderboards .subTitle").text(
@@ -120,6 +122,7 @@ function updateFooter(lb: LbKey): void {
   }
   if (currentRank[lb]) {
     const entry = currentRank[lb];
+    const date = new Date(entry.timestamp);
     $(`#leaderboardsWrapper table.${side} tfoot`).html(`
     <tr>
     <td>${entry.rank}</td>
@@ -137,9 +140,8 @@ function updateFooter(lb: LbKey): void {
         : entry.consistency.toFixed(2) + "%"
     }</div></td>
     <td class="alignRight">time<br><div class="sub">${lb}</div></td>
-    <td class="alignRight">${moment(entry.timestamp).format(
-      "DD MMM YYYY"
-    )}<br><div class='sub'>${moment(entry.timestamp).format("HH:mm")}</div></td>
+    <td class="alignRight">${format(date, "dd MMM yyyy")}<br>
+    <div class='sub'>${format(date, "HH:mm")}</div></td>
   </tr>
   `);
   }
@@ -216,6 +218,7 @@ function fillTable(lb: LbKey, prepend?: number): void {
     if (entry.name == loggedInUserName) {
       meClassString = ' class="me"';
     }
+    const date = new Date(entry.timestamp);
     html += `
     <tr ${meClassString}>
     <td>${
@@ -235,9 +238,8 @@ function fillTable(lb: LbKey, prepend?: number): void {
         : entry.consistency.toFixed(2) + "%"
     }</div></td>
     <td class="alignRight">time<br><div class="sub">${lb}</div></td>
-    <td class="alignRight">${moment(entry.timestamp).format(
-      "DD MMM YYYY"
-    )}<br><div class='sub'>${moment(entry.timestamp).format("HH:mm")}</div></td>
+    <td class="alignRight">${format(date, "dd MMM yyyy")}<br>
+    <div class='sub'>${format(date, "HH:mm")}</div></td>
   </tr>
   `;
   }
@@ -281,7 +283,7 @@ async function update(): Promise<void> {
     Ape.leaderboards.get("english", "time", "60", 0),
   ];
 
-  if (firebase.auth().currentUser) {
+  if (Auth.currentUser) {
     leaderboardRequests.push(
       Ape.leaderboards.getRank("english", "time", "15"),
       Ape.leaderboards.getRank("english", "time", "60")
@@ -381,7 +383,7 @@ async function requestNew(lb: LbKey, skip: number): Promise<void> {
 
 export function show(): void {
   if ($("#leaderboardsWrapper").hasClass("hidden")) {
-    if (firebase.auth().currentUser) {
+    if (Auth.currentUser) {
       $("#leaderboardsWrapper #leaderboards .rightTableJumpToMe").removeClass(
         "disabled"
       );

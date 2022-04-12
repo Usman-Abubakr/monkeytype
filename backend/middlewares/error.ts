@@ -30,15 +30,14 @@ async function errorHandlingMiddleware(
     monkeyResponse.message = error.message;
     monkeyResponse.status = error.status;
   } else {
-    monkeyResponse.message =
-      "Oops! Our monkeys dropped their bananas. Please try again later.";
+    monkeyResponse.message = `Oops! Our monkeys dropped their bananas. Please try again later. - ${monkeyResponse.data.errorId}`;
   }
 
   if (process.env.MODE !== "dev" && monkeyResponse.status >= 500) {
     const { uid, errorId } = monkeyResponse.data;
 
     try {
-      await Logger.log(
+      await Logger.logToDb(
         "system_error",
         `${monkeyResponse.status} ${error.message} ${error.stack}`,
         uid
@@ -53,12 +52,11 @@ async function errorHandlingMiddleware(
         endpoint: req.originalUrl,
       });
     } catch (e) {
-      console.error("Failed to save error.");
-      console.error(e);
+      Logger.error("Logging to db failed.");
+      Logger.error(e);
     }
   } else {
-    console.error(error.message);
-    console.error(error.stack);
+    Logger.error(`Error: ${error.message} Stack: ${error.stack}`);
   }
 
   return handleMonkeyResponse(monkeyResponse, res);

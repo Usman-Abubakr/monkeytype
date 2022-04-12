@@ -2900,10 +2900,10 @@
       "length": 161
     },
     {
-      "text": "I'll close my eyes and then I won't see the love you do not feel when you're holding me. Morning will come and I'll do what's right. Just give me till then to give up this fight.",
+      "text": "I'll close my eyes. Then I won't see the love you don't feel when you're holding me. Morning will come, and I'll do what's right. Just give me till then to give up this fight.",
       "source": "I Can't Make You Love Me",
       "id": 485,
-      "length": 178
+      "length": 175
     },
     {
       "text": "Remember that humor is written backwards. That means you first find the cliche you want to work on, then build a story around it.",
@@ -7214,10 +7214,10 @@
       "length": 231
     },
     {
-      "text": "I can't make you love me if you don't. You can't make your heart feel something it won't. Here in the dark in these final hours I will lay down my heart and I'll feel the power.",
+      "text": "I can't make you love me if you don't. You can't make your heart feel something it won't. Here in the dark, in these final hours, I will lay down my heart, and I'll feel the power.",
       "source": "I Can't Make You Love Me",
       "id": 1214,
-      "length": 177
+      "length": 180
     },
     {
       "text": "I didn't know it would be people you barely knew becoming friends that harbored you. And dreams you didn't even know you had - coming true. I didn't know it would be superpowers rising up out of tragedies, and perfect moments in a nearly empty classroom.",
@@ -30026,7 +30026,7 @@
       "id": 5069
     },
     {
-      "text": "Fall, though, is the worst. Few things are worse than fall in New York, Some of the things that live in the lower intestines of rats would disagree, but most of the things that live in the lower intestines of rats are highly disagreeable anyways, so their opinion can and should be discounted.",
+      "text": "Fall, though, is the worst. Few things are worse than fall in New York. Some of the things that live in the lower intestines of rats would disagree, but most of the things that live in the lower intestines of rats are highly disagreeable anyways, so their opinion can and should be discounted.",
       "source": "Mostly Harmless",
       "length": 293,
       "id": 5070
@@ -31563,7 +31563,7 @@
     },
     {
       "text": "Fire roared through the bifurcated city of Ankh-Morpork. Where it licked the Wizards' Quarter it burned blue and green and was even laced with strange sparks of the eighth color, octarine; where its outriders found their way into the vats and oil stores all along Merchant Street it progressed in a series of blazing fountains and explosions; in the streets of the perfume blenders it burned with a sweetness; where it touched bundles of rare and dry herbs in the storerooms of the drugmasters it made men go mad and talk to God.",
-      "source": "Terry Pratchet, The Color of Magic",
+      "source": "Terry Pratchett, The Color of Magic",
       "length": 529,
       "id": 5337
     },
@@ -34796,15 +34796,15 @@
       "id": 5903
     },
     {
-      "text": "He gazed up at the enormous face. Forty years it had taken him to learn what kind of smile was hidden beneath the dark moustache. O cruel, needless misunderstanding! O stubborn, self-willed exile from the loving breast!",
+      "text": "He gazed up at the enormous face. Forty years it had taken him to learn what kind of smile was hidden beneath the dark moustache. O cruel, needless misunderstanding! O stubborn, self-willed exile from the loving breast! But it was all right, everything was all right, the struggle was finished. He had won the victory over himself. He loved Big Brother.",
       "source": "Nineteen Eighty-Four",
-      "length": 219,
+      "length": 353,
       "id": 5904
     },
     {
-      "text": "But it was all right, everything was all right, the struggle was finished. He had won the victory over himself. He loved Big Brother.",
-      "source": "Nineteen Eighty-Four",
-      "length": 133,
+      "text": "He put his hands in his coat pockets and turned back eagerly to his scrutiny of the house, as though my presence marred the sacredness of the vigil. So I walked away and left him standing there in the moonlight - watching over nothing.",
+      "source": "The Great Gatsby",
+      "length": 235,
       "id": 5905
     },
     {
@@ -34872,6 +34872,60 @@
       "source": "Mr. Robot",
       "length": 332,
       "id": 5916
+    },
+    {
+      "text": "Lot 666, then: a chandelier in pieces. Some of you may recall the strange affair of the Phantom of the Opera: a mystery never fully explained. We are told ladies and gentlemen, that this is the very chandelier which figures in the famous disaster. Our workshops have restored it and fitted up parts of it with wiring for the new electric light, so that we may get a hint of what it may look like when re-assembled. Perhaps we may frighten away the ghost of so many years ago with a little illumination, gentlemen?",
+      "source": "The Phantom of the Opera",
+      "length": 513,
+      "id": 5917
+    },
+    {
+      "text": "They say nothing lasts forever; dreams change, trends come and go, but friendships never go out of style.",
+      "source": "Sex and the City",
+      "length": 105,
+      "id": 5918
+    },
+    {
+      "text": "He said: \"One day you'll leave this world behind. So live a life you will remember\". My father told me when I was just a child. \"These are the nights that never die\". My father told me...",
+      "source": "Avicii - The Nights",
+      "length": 187,
+      "id": 5919
+    },
+    {
+      "text": "What do I do? System architecture. Networking and security. No one in this house can touch me on that. But does anyone appreciate that? While you were busy minoring in gender studies and singing a capella at Sarah Lawrence, I was gaining root access to NSA servers. I was one click away from starting a second Iranian revolution. I prevent cross-site scripting, I monitor for DDoS attacks, emergency database rollbacks, and faulty transaction handlings. The Internet heard of it? Transfers half a petabyte of data every minute. Do you have any idea how that happens? All those YouTube ones and zeroes streaming directly to your little smart phone day after day? Every joe who gets outraged if he can't get the new dubstep Skrillex remix in under 12 seconds? It's not magic, it's talent and sweat. People like me, ensuring your packets get delivered, un-sniffed. So what do I do? I make sure that one bad config on one key component doesn't bankrupt the entire company. That's what I do.",
+      "source": "Bertram Gilfoyle - Silicon Valley",
+      "length": 986,
+      "id": 5920
+    },
+    {
+      "text": "Myanmar and Brazil. Amusing coincidence that two of the three countries that provide the world's sesame seeds have such large cicada population, no? The cicadas of Myanmar emerge every 13 years, while the Brazilian cicadas emerge every 17. Next year they will hatch, simultaneously, for the first time in 221 years. Crops from both countries will be decimated. Unlike Myanmar and Brazil, Indonesia has no cicada population. I was surprised to see Indonesian sesame seed futures priced so low. I made a purchase. And now, if the shortage spikes the global price even ten percent. We'll profit... Evan? 'Sixty-eight million dollars.' If you wish, I could tap that projected revenue and make you a bridge loan of 15 million dollars, gentlemen.",
+      "source": "Peter Gregory - Silicon Valley",
+      "length": 740,
+      "id": 5921
+    },
+    {
+      "text": "So the crime was a trip to the market. The sentence, a lifetime of hurt. As she saw through tears. Her home of thirty of years, reduced to rubble and dirt. And she cursed those who would approach her and hold papers up to her face, and say \"You should feel blessed you live in the U.S and not some other hellish place\"",
+      "source": "Mischief Brew - Save a City",
+      "length": 318,
+      "id": 5922
+    },
+    {
+      "text": "If it starts with an explosion do you end it with a bang? First the whistles start a-blowin' then the guilty finally hang. There's a storm on the horizon and the waters on the rise, we're watching history repeatin' with the changin' times. The figureheads keep talking but they're buried in the sand. Everyone is pointing fingers, everybody plays their hand. The fix is in, the game is rigged, the pawns are polarized. You either pick a side or think outside the picket lines" ,
+      "source": "Matt Pless - When the Frayed Wind Blows",
+      "length": 475,
+      "id": 5923
+    },
+    {
+      "text": "I’m just so tired and really bored of the way that things have been. I'm a lonely little fish inside a bowl where I can't swim. I'm a lion in a cage, I'm a machine with out the rage, I'm a early twenties six piece McNothing. It hurts to wake up in the morning cause my back is all messed up. I can't get a loan approvement cause I'm shit out of my luck. I've got a banjo tattoo and barely any attitude. But I need to suck it up and get a job.",
+      "source": "Local News Legend - Get the Fuck Outta Here",
+      "length": 442,
+      "id": 5924
+    },
+    {
+      "text": "Time passed. Even with the power throbbing through her head it was a painfully hard task, like threading a needle by moonlight, but eventually she had a handful of silver. In the slow, heavy world in which she now appeared to be she took the hank and threw it slowly towards Esk. It became a cloud, swirled like a whirlpool and vanished. She was aware of a shrill chittering noise, and shadows on the edge of sight. Well, it happened to everyone sooner or later. They had come, drawn as always by a discharge of magic. You just had to learn to ignore them.",      
+      "source": "Terry Pratchett - Equal Rites",
+      "length": 556,
+      "id": 5925
     }
   ]
 }

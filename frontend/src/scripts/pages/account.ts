@@ -12,8 +12,11 @@ import * as SignOutButton from "../account/sign-out-button";
 import * as TodayTracker from "../test/today-tracker";
 import * as Notifications from "../elements/notifications";
 import Page from "./page";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as ActivePage from "../states/active-page";
+import format from "date-fns/format";
+
+import type { ScaleChartOptions } from "chart.js";
 
 let filterDebug = false;
 //toggle filterdebug
@@ -149,6 +152,7 @@ function loadMoreLines(lineIndex?: number): void {
       charStats = result.correctChars + "/" + result.incorrectChars + "/-/-";
     }
 
+    const date = new Date(result.timestamp);
     $(".pageAccount .history table tbody").append(`
     <tr class="resultRow" id="result-${i}">
     <td>${pb}</td>
@@ -160,7 +164,9 @@ function loadMoreLines(lineIndex?: number): void {
     <td>${result.mode} ${result.mode2}</td>
     <td class="infoIcons">${icons}</td>
     <td>${tagIcons}</td>
-    <td>${moment(result.timestamp).format("DD MMM YYYY<br>HH:mm")}</td>
+    <td>${format(date, "dd MMM yyyy")}<br>
+    ${format(date, "HH:mm")}
+    </td>
     </tr>`);
   }
   visibleTableLines = newVisibleLines;
@@ -177,33 +183,13 @@ export function reset(): void {
   ChartController.accountActivity.data.datasets[1].data = [];
   ChartController.accountHistory.data.datasets[0].data = [];
   ChartController.accountHistory.data.datasets[1].data = [];
-  ChartController.accountActivity.update();
-  ChartController.accountHistory.update();
+  ChartController.accountActivity.updateColors();
+  ChartController.accountHistory.updateColors();
 }
 
-type ChartData = {
-  x: number;
-  y: number;
-  wpm: number;
-  acc: number;
-  mode: string;
-  mode2: string | number;
-  punctuation: boolean;
-  language: string;
-  timestamp: number;
-  difficulty: string;
-  raw: number;
-};
-
-type AccChartData = {
-  x: number;
-  y: number;
-  errorRate: number;
-};
-
 let totalSecondsFiltered = 0;
-let chartData: ChartData[] = [];
-let accChartData: AccChartData[] = [];
+let chartData: MonkeyTypes.HistoryChartData[] = [];
+let accChartData: MonkeyTypes.AccChartData[] = [];
 
 export function smoothHistory(factor: number): void {
   const smoothedWpmData = Misc.smooth(
@@ -229,7 +215,10 @@ export function smoothHistory(factor: number): void {
 
   ChartController.accountHistory.data.datasets[0].data = chartData2;
   ChartController.accountHistory.data.datasets[1].data = accChartData2;
-  ChartController.accountHistory.update();
+
+  if (chartData2.length || accChartData2.length) {
+    ChartController.accountHistory.update();
+  }
 }
 
 function applyHistorySmoothing(): void {
@@ -309,13 +298,15 @@ export function update(): void {
             resdiff = "normal";
           }
           if (!ResultFilters.getFilter("difficulty", resdiff)) {
-            if (filterDebug)
+            if (filterDebug) {
               console.log(`skipping result due to difficulty filter`, result);
+            }
             return;
           }
           if (!ResultFilters.getFilter("mode", result.mode)) {
-            if (filterDebug)
+            if (filterDebug) {
               console.log(`skipping result due to mode filter`, result);
+            }
             return;
           }
 
@@ -325,8 +316,9 @@ export function update(): void {
               timefilter = result.mode2;
             }
             if (!ResultFilters.getFilter("time", timefilter)) {
-              if (filterDebug)
+              if (filterDebug) {
                 console.log(`skipping result due to time filter`, result);
+              }
               return;
             }
           } else if (result.mode == "words") {
@@ -337,8 +329,9 @@ export function update(): void {
               wordfilter = result.mode2;
             }
             if (!ResultFilters.getFilter("words", wordfilter)) {
-              if (filterDebug)
+              if (filterDebug) {
                 console.log(`skipping result due to word filter`, result);
+              }
               return;
             }
           }
@@ -358,11 +351,12 @@ export function update(): void {
               filter !== undefined &&
               !ResultFilters.getFilter("quoteLength", filter)
             ) {
-              if (filterDebug)
+              if (filterDebug) {
                 console.log(
                   `skipping result due to quoteLength filter`,
                   result
                 );
+              }
               return;
             }
           }
@@ -379,8 +373,9 @@ export function update(): void {
             langFilter = true;
           }
           if (!langFilter) {
-            if (filterDebug)
+            if (filterDebug) {
               console.log(`skipping result due to language filter`, result);
+            }
             return;
           }
 
@@ -389,8 +384,9 @@ export function update(): void {
             puncfilter = "on";
           }
           if (!ResultFilters.getFilter("punctuation", puncfilter)) {
-            if (filterDebug)
+            if (filterDebug) {
               console.log(`skipping result due to punctuation filter`, result);
+            }
             return;
           }
 
@@ -399,21 +395,24 @@ export function update(): void {
             numfilter = "on";
           }
           if (!ResultFilters.getFilter("numbers", numfilter)) {
-            if (filterDebug)
+            if (filterDebug) {
               console.log(`skipping result due to numbers filter`, result);
+            }
             return;
           }
 
           if (result.funbox === "none" || result.funbox === undefined) {
             if (!ResultFilters.getFilter("funbox", "none")) {
-              if (filterDebug)
+              if (filterDebug) {
                 console.log(`skipping result due to funbox filter`, result);
+              }
               return;
             }
           } else {
             if (!ResultFilters.getFilter("funbox", result.funbox)) {
-              if (filterDebug)
+              if (filterDebug) {
                 console.log(`skipping result due to funbox filter`, result);
+              }
               return;
             }
           }
@@ -447,8 +446,9 @@ export function update(): void {
           }
 
           if (tagHide) {
-            if (filterDebug)
+            if (filterDebug) {
               console.log(`skipping result due to tag filter`, result);
+            }
             return;
           }
 
@@ -471,8 +471,9 @@ export function update(): void {
           }
 
           if (datehide) {
-            if (filterDebug)
+            if (filterDebug) {
               console.log(`skipping result due to date filter`, result);
+            }
             return;
           }
 
@@ -620,9 +621,10 @@ export function update(): void {
             : "";
           topWpm = result.wpm;
           if (result.mode == "custom") topMode = result.mode;
-          else
+          else {
             topMode =
               result.mode + " " + result.mode2 + puncsctring + numbsctring;
+          }
         }
 
         totalWpm += result.wpm;
@@ -642,15 +644,9 @@ export function update(): void {
     loadMoreLines();
     ////////
 
-    type ActivityChartDataPoint = {
-      x: number;
-      y: number;
-      amount?: number;
-    };
-
-    const activityChartData_amount: ActivityChartDataPoint[] = [];
-    const activityChartData_time: ActivityChartDataPoint[] = [];
-    const activityChartData_avgWpm: ActivityChartDataPoint[] = [];
+    const activityChartData_amount: MonkeyTypes.ActivityChartDataPoint[] = [];
+    const activityChartData_time: MonkeyTypes.ActivityChartDataPoint[] = [];
+    const activityChartData_avgWpm: MonkeyTypes.ActivityChartDataPoint[] = [];
     // let lastTimestamp = 0;
     Object.keys(activityChartData).forEach((date) => {
       const dateInt = parseInt(date);
@@ -675,12 +671,16 @@ export function update(): void {
       // lastTimestamp = date;
     });
 
+    const accountActivityScaleOptions = (
+      ChartController.accountActivity.options as ScaleChartOptions<
+        "bar" | "line"
+      >
+    ).scales;
+
     if (Config.alwaysShowCPM) {
-      ChartController.accountActivity.options.scales.yAxes[1].scaleLabel.labelString =
-        "Average Cpm";
+      accountActivityScaleOptions["avgWpm"].title.text = "Average Cpm";
     } else {
-      ChartController.accountActivity.options.scales.yAxes[1].scaleLabel.labelString =
-        "Average Wpm";
+      accountActivityScaleOptions["avgWpm"].title.text = "Average Wpm";
     }
 
     ChartController.accountActivity.data.datasets[0].data =
@@ -688,12 +688,14 @@ export function update(): void {
     ChartController.accountActivity.data.datasets[1].data =
       activityChartData_avgWpm;
 
+    const accountHistoryScaleOptions = (
+      ChartController.accountHistory.options as ScaleChartOptions<"line">
+    ).scales;
+
     if (Config.alwaysShowCPM) {
-      ChartController.accountHistory.options.scales.yAxes[0].scaleLabel.labelString =
-        "Characters per Minute";
+      accountHistoryScaleOptions["wpm"].title.text = "Characters per Minute";
     } else {
-      ChartController.accountHistory.options.scales.yAxes[0].scaleLabel.labelString =
-        "Words per Minute";
+      accountHistoryScaleOptions["wpm"].title.text = "Words per Minute";
     }
 
     ChartController.accountHistory.data.datasets[0].data = chartData;
@@ -704,14 +706,13 @@ export function update(): void {
     const maxWpmChartVal = Math.max(...wpms);
 
     // let accuracies = accChartData.map((r) => r.y);
-    ChartController.accountHistory.options.scales.yAxes[0].ticks.max =
+    accountHistoryScaleOptions["wpm"].max =
       Math.floor(maxWpmChartVal) + (10 - (Math.floor(maxWpmChartVal) % 10));
 
     if (!Config.startGraphsAtZero) {
-      ChartController.accountHistory.options.scales.yAxes[0].ticks.min =
-        Math.floor(minWpmChartVal);
+      accountHistoryScaleOptions["wpm"].min = Math.floor(minWpmChartVal);
     } else {
-      ChartController.accountHistory.options.scales.yAxes[0].ticks.min = 0;
+      accountHistoryScaleOptions["wpm"].min = 0;
     }
 
     if (chartData == [] || chartData.length == 0) {
@@ -834,18 +835,6 @@ export function update(): void {
       ${(testRestarts / testCount).toFixed(1)} restarts per completed test
     `);
 
-    if (ChartController.accountHistory.data.datasets[0].data.length > 0) {
-      ChartController.accountHistory.options.plugins.trendlineLinear = true;
-    } else {
-      ChartController.accountHistory.options.plugins.trendlineLinear = false;
-    }
-
-    if (ChartController.accountActivity.data.datasets[0].data.length > 0) {
-      ChartController.accountActivity.options.plugins.trendlineLinear = true;
-    } else {
-      ChartController.accountActivity.options.plugins.trendlineLinear = false;
-    }
-
     const wpmPoints = filteredResults.map((r) => r.wpm).reverse();
 
     const trend = Misc.findLineByLeastSquares(wpmPoints);
@@ -866,7 +855,7 @@ export function update(): void {
     );
 
     applyHistorySmoothing();
-    ChartController.accountActivity.update();
+    ChartController.accountActivity.updateColors();
     LoadingPage.updateBar(100, true);
     setTimeout(() => {
       if (ActivePage.get() == "account") SignOutButton.show();

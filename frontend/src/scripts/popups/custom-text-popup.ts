@@ -3,7 +3,7 @@ import * as ManualRestart from "../test/manual-restart-tracker";
 import * as TestLogic from "../test/test-logic";
 import * as ChallengeController from "../controllers/challenge-controller";
 import Config, * as UpdateConfig from "../config";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as WordFilterPopup from "./word-filter-popup";
 import * as Notifications from "../elements/notifications";
 import * as SavedTextsPopup from "./saved-texts-popup";
@@ -26,8 +26,12 @@ export function show(): void {
         let newtext = CustomText.text.join(CustomText.delimiter);
         newtext = newtext.replace(/\n /g, "\n");
         $(`${popup} textarea`).val(newtext);
-        $(`${popup} .wordcount input`).val(CustomText.word);
-        $(`${popup} .time input`).val(CustomText.time);
+        $(`${popup} .wordcount input`).val(
+          CustomText.word === -1 ? "" : CustomText.word
+        );
+        $(`${popup} .time input`).val(
+          CustomText.time === -1 ? "" : CustomText.time
+        );
         $(`${popup} textarea`).trigger("focus");
       });
   }
@@ -135,20 +139,22 @@ function apply(): void {
   // text = Misc.remove_non_ascii(text);
   text = text.replace(/[\u2060]/g, "");
   CustomText.setText(text.split(CustomText.delimiter));
-  CustomText.setWord(parseInt($(`${popup} .wordcount input`).val() as string));
-  CustomText.setTime(parseInt($(`${popup} .time input`).val() as string));
+  CustomText.setWord(
+    parseInt($(`${popup} .wordcount input`).val() as string) || -1
+  );
+  CustomText.setTime(parseInt($(`${popup} .time input`).val() as string) || -1);
 
   CustomText.setIsWordRandom(
-    $(`${popup} .checkbox input`).prop("checked") && !isNaN(CustomText.word)
+    $(`${popup} .checkbox input`).prop("checked") && CustomText.word > -1
   );
   CustomText.setIsTimeRandom(
-    $(`${popup} .checkbox input`).prop("checked") && !isNaN(CustomText.time)
+    $(`${popup} .checkbox input`).prop("checked") && CustomText.time > -1
   );
 
   if (
-    isNaN(CustomText.word) &&
-    isNaN(CustomText.time) &&
-    (CustomText.isTimeRandom || CustomText.isWordRandom)
+    $(`${popup} .checkbox input`).prop("checked") &&
+    !CustomText.isTimeRandom &&
+    !CustomText.isWordRandom
   ) {
     Notifications.add(
       "You need to specify word count or time in seconds to start a random custom test.",
@@ -159,9 +165,9 @@ function apply(): void {
   }
 
   if (
-    !isNaN(CustomText.word) &&
-    !isNaN(CustomText.time) &&
-    (CustomText.isTimeRandom || CustomText.isWordRandom)
+    $(`${popup} .checkbox input`).prop("checked") &&
+    CustomText.isTimeRandom &&
+    CustomText.isWordRandom
   ) {
     Notifications.add(
       "You need to pick between word count or time in seconds to start a random custom test.",

@@ -5,9 +5,7 @@
     "node": true
   },
   "globals": {
-    "firebase": "readonly",
     "$": "readonly",
-    "moment": "readonly",
     "jQuery": "readonly",
     "html2canvas": "readonly",
     "ClipboardItem": "readonly",
@@ -30,6 +28,7 @@
     "json/*": ["error"],
     "indent": ["off"],
     "linebreak-style": ["error", "unix"],
+    "curly": ["error", "multi-line"],
     "quotes": [
       "error",
       "double",

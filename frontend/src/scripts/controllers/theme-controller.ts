@@ -1,12 +1,12 @@
 import * as ThemeColors from "../elements/theme-colors";
 import * as ChartController from "./chart-controller";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import Config, * as UpdateConfig from "../config";
-import tinycolor from "tinycolor2";
 import * as BackgroundFilter from "../elements/custom-background-filter";
 import * as ConfigEvent from "../observables/config-event";
 import * as DB from "../db";
 import * as Notifications from "../elements/notifications";
+import * as AnalyticsController from "../controllers/analytics-controller";
 
 let isPreviewingTheme = false;
 export let randomTheme: string | null = null;
@@ -102,18 +102,8 @@ function apply(themeName: string, isCustom: boolean, isPreview = false): void {
   let name = "serika_dark";
   if (!isCustom) {
     name = themeName;
-    Misc.swapElements(
-      $('.pageSettings [tabContent="custom"]'),
-      $('.pageSettings [tabContent="preset"]'),
-      250
-    );
   } else {
     name = "custom";
-    Misc.swapElements(
-      $('.pageSettings [tabContent="preset"]'),
-      $('.pageSettings [tabContent="custom"]'),
-      250
-    );
   }
 
   ThemeColors.reset();
@@ -128,8 +118,9 @@ function apply(themeName: string, isCustom: boolean, isPreview = false): void {
       if (isCustom && !isPreview && snapshot) {
         const customColors =
           snapshot.customThemes.find((e) => e._id === themeName)?.colors ?? [];
-        if (customColors.length > 0)
+        if (customColors.length > 0) {
           UpdateConfig.setCustomThemeColors(customColors);
+        }
       }
       if (themeName !== "custom" && snapshot) {
         const customThemes = snapshot.customThemes;
@@ -141,24 +132,18 @@ function apply(themeName: string, isCustom: boolean, isPreview = false): void {
       });
     }
 
-    try {
-      firebase.analytics().logEvent("changedTheme", {
-        theme: themeName,
-      });
-    } catch (e) {
-      console.log("Analytics unavailable");
-    }
+    AnalyticsController.log("changedTheme", { theme: themeName });
     if (!isPreview) {
       ThemeColors.getAll().then((colors) => {
-        $(".current-theme .text").text(
-          isCustom ? "custom" : themeName.replace(/_/g, " ")
-        );
         $(".keymap-key").attr("style", "");
         ChartController.updateAllChartColors();
         updateFavicon(128, 32);
         $("#metaThemeColor").attr("content", colors.bg);
       });
     }
+    $(".current-theme .text").text(
+      isCustom ? "custom" : themeName.replace(/_/g, " ")
+    );
   });
 }
 
@@ -194,11 +179,11 @@ export function randomizeTheme(): void {
       randomList = Config.favThemes;
     } else if (Config.randomTheme === "light") {
       randomList = themes
-        .filter((t) => tinycolor(t.bgColor).isLight())
+        .filter((t) => Misc.isColorLight(t.bgColor))
         .map((t) => t.name);
     } else if (Config.randomTheme === "dark") {
       randomList = themes
-        .filter((t) => tinycolor(t.bgColor).isDark())
+        .filter((t) => Misc.isColorDark(t.bgColor))
         .map((t) => t.name);
     } else if (Config.randomTheme === "on") {
       randomList = themes.map((t) => {
@@ -209,7 +194,7 @@ export function randomizeTheme(): void {
     }
 
     const previousTheme = randomTheme;
-    randomTheme = randomList[Math.floor(Math.random() * randomList.length)];
+    randomTheme = Misc.randomElementFromArray(randomList);
 
     // if (Config.randomTheme === "custom") {
     // changeCustomTheme(randomTheme, true);
@@ -231,7 +216,13 @@ export function randomizeTheme(): void {
 }
 
 export function clearRandom(): void {
+  if (randomTheme === null) return;
   randomTheme = null;
+  if (Config.customTheme) {
+    apply("custom", true);
+  } else {
+    apply(Config.theme, false);
+  }
 }
 
 export function applyCustomBackgroundSize(): void {
@@ -267,7 +258,7 @@ export function applyCustomBackground(): void {
 }
 
 window
-  .matchMedia("(prefers-color-scheme: dark)")
+  .matchMedia?.("(prefers-color-scheme: dark)")
   ?.addEventListener("change", (event) => {
     if (!Config.autoSwitchTheme || Config.customTheme) return;
     if (event.matches) {
@@ -278,10 +269,12 @@ window
   });
 
 ConfigEvent.subscribe((eventKey, eventValue, nosave) => {
-  if (eventKey === "customTheme")
+  if (eventKey === "customTheme") {
     eventValue ? set("custom", true) : set(Config.theme, false);
-  if (eventKey === "customThemeColors")
+  }
+  if (eventKey === "customThemeColors") {
     nosave ? preview("custom", true) : set("custom", true);
+  }
   if (eventKey === "theme") {
     clearPreview();
     set(eventValue as string, false);

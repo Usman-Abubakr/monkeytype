@@ -3,6 +3,8 @@ import * as AccountButton from "./elements/account-button";
 import * as Notifications from "./elements/notifications";
 import * as LoadingPage from "./pages/loading";
 import DefaultConfig from "./constants/default-config";
+import { Auth } from "./firebase";
+import { defaultSnap } from "./constants/default-snapshot";
 
 let dbSnapshot: MonkeyTypes.Snapshot;
 
@@ -24,49 +26,54 @@ export async function initSnapshot(): Promise<
   MonkeyTypes.Snapshot | number | boolean
 > {
   //send api request with token that returns tags, presets, and data needed for snap
-  const defaultSnap: MonkeyTypes.Snapshot = {
-    results: undefined,
-    personalBests: {
-      time: {},
-      words: {},
-      zen: { zen: [] },
-      quote: { custom: [] },
-      custom: { custom: [] },
-    },
-    name: undefined,
-    customThemes: [],
-    presets: [],
-    tags: [],
-    favouriteThemes: [],
-    banned: undefined,
-    verified: undefined,
-    emailVerified: undefined,
-    lbMemory: { time: { 15: { english: 0 }, 60: { english: 0 } } },
-    globalStats: {
-      time: 0,
-      started: 0,
-      completed: 0,
-    },
-    quoteRatings: undefined,
-    quoteMod: false,
-  };
   const snap = defaultSnap;
   try {
-    if (firebase.auth().currentUser == null) return false;
+    if (Auth.currentUser == null) return false;
     // if (ActivePage.get() == "loading") {
     //   LoadingPage.updateBar(22.5);
     // } else {
     //   LoadingPage.updateBar(16);
     // }
     // LoadingPage.updateText("Downloading user...");
-    const [userData, configData, tagsData, presetsData] = (
+    const [userResponse, configResponse, tagsResponse, presetsResponse] =
       await Promise.all([
         Ape.users.getData(),
         Ape.configs.get(),
         Ape.users.getTags(),
         Ape.presets.get(),
-      ])
-    ).map((response: Ape.Response) => response.data);
+      ]);
+
+    if (userResponse.status !== 200) {
+      throw {
+        message: `${userResponse.message} (user)`,
+        responseCode: userResponse.status,
+      };
+    }
+    if (configResponse.status !== 200) {
+      throw {
+        message: `${configResponse.message} (config)`,
+        responseCode: configResponse.status,
+      };
+    }
+    if (tagsResponse.status !== 200) {
+      throw {
+        message: `${tagsResponse.message} (tags)`,
+        responseCode: tagsResponse.status,
+      };
+    }
+    if (presetsResponse.status !== 200) {
+      throw {
+        message: `${presetsResponse.message} (presets)`,
+        responseCode: presetsResponse.status,
+      };
+    }
+
+    const [userData, configData, tagsData, presetsData] = [
+      userResponse,
+      configResponse,
+      tagsResponse,
+      presetsResponse,
+    ].map((response: Ape.Response) => response.data);
 
     snap.name = userData.name;
     snap.personalBests = userData.personalBests;
@@ -152,7 +159,7 @@ export async function initSnapshot(): Promise<
 }
 
 export async function getUserResults(): Promise<boolean> {
-  const user = firebase.auth().currentUser;
+  const user = Auth.currentUser;
   if (user == null) return false;
   if (dbSnapshot === null) return false;
   if (dbSnapshot.results !== undefined) {
@@ -175,8 +182,9 @@ export async function getUserResults(): Promise<boolean> {
       if (result.lazyMode === undefined) result.lazyMode = false;
       if (result.difficulty === undefined) result.difficulty = "normal";
       if (result.funbox === undefined) result.funbox = "none";
-      if (result.language === undefined || result.language === null)
+      if (result.language === undefined || result.language === null) {
         result.language = "english";
+      }
       if (result.numbers === undefined) result.numbers = false;
       if (result.punctuation === undefined) result.punctuation = false;
     });
@@ -220,7 +228,7 @@ export async function editCustomTheme(
   themeId: string,
   newTheme: MonkeyTypes.RawCustomTheme
 ): Promise<boolean> {
-  const user = firebase.auth().currentUser;
+  const user = Auth.currentUser;
   if (user === null) return false;
   if (dbSnapshot === null) return false;
 
@@ -251,7 +259,7 @@ export async function editCustomTheme(
 }
 
 export async function deleteCustomTheme(themeId: string): Promise<boolean> {
-  const user = firebase.auth().currentUser;
+  const user = Auth.currentUser;
   if (user === null) return false;
   if (dbSnapshot === null) return false;
 
@@ -306,74 +314,80 @@ export async function getUserHighestWpm<M extends MonkeyTypes.Mode>(
   return retval;
 }
 
-export async function getUserAverageWpm10<M extends MonkeyTypes.Mode>(
+export async function getUserAverage10<M extends MonkeyTypes.Mode>(
   mode: M,
   mode2: MonkeyTypes.Mode2<M>,
   punctuation: boolean,
   language: string,
   difficulty: MonkeyTypes.Difficulty,
   lazyMode: boolean
-): Promise<number> {
-  function cont(): number {
+): Promise<[number, number]> {
+  const snapshot = getSnapshot();
+
+  if (!snapshot) return [0, 0];
+
+  function cont(): [number, number] {
     const activeTagIds: string[] = [];
-    getSnapshot()?.tags?.forEach((tag) => {
+    snapshot.tags?.forEach((tag) => {
       if (tag.active === true) {
         activeTagIds.push(tag._id);
       }
     });
 
     let wpmSum = 0;
-    let count = 0;
+    let accSum = 0;
     let last10Wpm = 0;
+    let last10Acc = 0;
+    let count = 0;
     let last10Count = 0;
-    // You have to use every so you can break out of the loop
-    dbSnapshot.results?.every((result) => {
-      if (
-        result.mode == mode &&
-        result.punctuation == punctuation &&
-        result.language == language &&
-        result.difficulty == difficulty &&
-        (result.lazyMode === lazyMode ||
-          (result.lazyMode === undefined && lazyMode === false)) &&
-        ((activeTagIds.length === 0 && result.tags.length === 0) ||
-          (activeTagIds.length > 0 &&
-            result.tags.some((tag) => activeTagIds.includes(tag))))
-      ) {
-        // Continue if the mode2 doesn't match unless it's a quote.
-        if (result.mode2 != mode2 && mode != "quote") {
-          return true;
-        }
 
-        // Grab the most recent 10 wpm's for the current mode.
-        if (last10Count < 10) {
-          last10Wpm += result.wpm;
-          last10Count++;
-        }
+    if (snapshot.results !== undefined) {
+      for (const result of snapshot.results) {
+        if (
+          result.mode === mode &&
+          result.punctuation === punctuation &&
+          result.language === language &&
+          result.difficulty === difficulty &&
+          (result.lazyMode === lazyMode ||
+            (result.lazyMode === undefined && lazyMode === false)) &&
+          (activeTagIds.length === 0 ||
+            activeTagIds.some((tagId) => result.tags.includes(tagId)))
+        ) {
+          // Continue if the mode2 doesn't match and it's not a quote
+          if (result.mode2 !== mode2 && mode !== "quote") {
+            continue;
+          }
 
-        // Check mode2 matches and append, for quotes this is the quote id.
-        if (result.mode2 == mode2) {
-          wpmSum += result.wpm;
-          count++;
-          if (count >= 10) {
-            // Break out of every loop since we a maximum of the last 10 wpm results.
-            return false;
+          // Grab the most recent results from the current mode
+          if (last10Count < 10) {
+            last10Wpm += result.wpm;
+            last10Acc += result.acc;
+            last10Count++;
+          }
+
+          // Check if the mode2 matches and if it does, add it to the sum, for quotes, this is the quote id
+          if (result.mode2 === mode2) {
+            wpmSum += result.wpm;
+            accSum += result.acc;
+            count++;
+
+            if (count >= 10) break;
           }
         }
       }
-      return true;
-    });
-
-    // Return the last 10 average wpm for quote if the current quote id has never been completed before by the user.
-    if (count == 0 && mode == "quote") {
-      return last10Wpm / last10Count;
     }
 
-    // Return the average wpm of the last 10 completions for the targeted test mode.
-    return wpmSum / count;
+    // Return the last 10 average wpm & acc for quote
+    // if the current quote id has never been completed before by the user
+    if (count === 0 && mode === "quote") {
+      return [last10Wpm / last10Count, last10Acc / last10Count];
+    }
+
+    return [wpmSum / count, accSum / count];
   }
 
-  const retval =
-    dbSnapshot === null || (await getUserResults()) === false ? 0 : cont();
+  const retval: [number, number] =
+    snapshot === null || (await getUserResults()) === null ? [0, 0] : cont();
 
   return retval;
 }
@@ -438,7 +452,7 @@ export async function saveLocalPB<M extends MonkeyTypes.Mode>(
   if (mode == "quote") return;
   function cont(): void {
     let found = false;
-    if (dbSnapshot.personalBests === undefined)
+    if (dbSnapshot.personalBests === undefined) {
       dbSnapshot.personalBests = {
         time: {},
         words: {},
@@ -446,6 +460,7 @@ export async function saveLocalPB<M extends MonkeyTypes.Mode>(
         quote: { custom: [] },
         custom: { custom: [] },
       };
+    }
 
     if (dbSnapshot.personalBests[mode] === undefined) {
       if (mode === "zen") {
@@ -457,9 +472,10 @@ export async function saveLocalPB<M extends MonkeyTypes.Mode>(
       }
     }
 
-    if (dbSnapshot.personalBests[mode][mode2] === undefined)
+    if (dbSnapshot.personalBests[mode][mode2] === undefined) {
       dbSnapshot.personalBests[mode][mode2] =
         [] as unknown as MonkeyTypes.PersonalBests[M][keyof MonkeyTypes.PersonalBests[M]];
+    }
 
     (
       dbSnapshot.personalBests[mode][
@@ -688,15 +704,18 @@ export async function updateLbMemory<M extends MonkeyTypes.Mode>(
       timeMode2 = mode2 as 15 | 60;
 
     const snapshot = getSnapshot();
-    if (snapshot.lbMemory === undefined)
+    if (snapshot.lbMemory === undefined) {
       snapshot.lbMemory = { time: { 15: { english: 0 }, 60: { english: 0 } } };
-    if (snapshot.lbMemory[timeMode] === undefined)
+    }
+    if (snapshot.lbMemory[timeMode] === undefined) {
       snapshot.lbMemory[timeMode] = {
         15: { english: 0 },
         60: { english: 0 },
       };
-    if (snapshot.lbMemory[timeMode][timeMode2] === undefined)
+    }
+    if (snapshot.lbMemory[timeMode][timeMode2] === undefined) {
       snapshot.lbMemory[timeMode][timeMode2] = {};
+    }
     const current = snapshot.lbMemory[timeMode][timeMode2][language];
     snapshot.lbMemory[timeMode][timeMode2][language] = rank;
     if (api && current != rank) {
@@ -707,7 +726,7 @@ export async function updateLbMemory<M extends MonkeyTypes.Mode>(
 }
 
 export async function saveConfig(config: MonkeyTypes.Config): Promise<void> {
-  if (firebase.auth().currentUser !== null) {
+  if (Auth.currentUser !== null) {
     AccountButton.loading(true);
 
     const response = await Ape.configs.save(config);
@@ -733,8 +752,9 @@ export function saveLocalResult(
 
 export function updateLocalStats(stats: MonkeyTypes.Stats): void {
   const snapshot = getSnapshot();
-  if (snapshot.globalStats === undefined)
+  if (snapshot.globalStats === undefined) {
     snapshot.globalStats = {} as MonkeyTypes.Stats;
+  }
   if (snapshot !== null && snapshot.globalStats !== undefined) {
     if (snapshot.globalStats.time == undefined) {
       snapshot.globalStats.time = stats.time;

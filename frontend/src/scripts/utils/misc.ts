@@ -1,8 +1,10 @@
-import * as Loader from "./elements/loader";
+import * as Loader from "../elements/loader";
+import format from "date-fns/format";
+import { Auth } from "../firebase";
 
 export function getuid(): void {
   console.error("Only share this uid with Miodec and nobody else!");
-  console.log(firebase.auth().currentUser.uid);
+  console.log(Auth.currentUser?.uid);
   console.error("Only share this uid with Miodec and nobody else!");
 }
 
@@ -60,6 +62,16 @@ function hexToHSL(hex: string): {
     lgt: l,
     string: "hsl(" + h + "," + s + "%," + l + "%)",
   };
+}
+
+export function isColorLight(hex: string): boolean {
+  const hsl = hexToHSL(hex);
+  return hsl.lgt >= 50;
+}
+
+export function isColorDark(hex: string): boolean {
+  const hsl = hexToHSL(hex);
+  return hsl.lgt < 50;
 }
 
 type Theme = { name: string; bgColor: string; mainColor: string };
@@ -130,60 +142,6 @@ export async function getFunbox(
   return list.find(function (element) {
     return element.name == funbox;
   });
-}
-
-type QuoteCollection = {
-  quotes: MonkeyTypes.Quote[];
-  length?: number;
-  language?: string;
-  groups: number[][] | MonkeyTypes.Quote[][];
-};
-
-let quotes: QuoteCollection;
-export async function getQuotes(language: string): Promise<QuoteCollection> {
-  if (
-    quotes === undefined ||
-    quotes.language !== language.replace(/_\d*k$/g, "")
-  ) {
-    Loader.show();
-    try {
-      const data: QuoteCollection = await $.getJSON(`quotes/${language}.json`);
-      Loader.hide();
-      if (data.quotes === undefined || data.quotes.length === 0) {
-        quotes = {
-          quotes: [],
-          length: 0,
-          groups: [],
-        };
-        return quotes;
-      }
-      quotes = data;
-      quotes.length = data.quotes.length;
-      quotes.groups?.forEach((qg, i) => {
-        const lower = qg[0];
-        const upper = qg[1];
-        quotes.groups[i] = quotes.quotes.filter((q) => {
-          if (q.length >= lower && q.length <= upper) {
-            q.group = i;
-            return true;
-          } else {
-            return false;
-          }
-        });
-      });
-      return quotes;
-    } catch {
-      Loader.hide();
-      quotes = {
-        quotes: [],
-        length: 0,
-        groups: [],
-      };
-      return quotes;
-    }
-  } else {
-    return quotes;
-  }
 }
 
 let layoutsList: MonkeyTypes.Layouts = {};
@@ -405,8 +363,9 @@ export async function getReleasesFromGitHub(): Promise<
           $("#versionHistory .releases").append(`
           <div class="release">
             <div class="title">${release.name}</div>
-            <div class="date">${moment(release.published_at).format(
-              "DD MMM YYYY"
+            <div class="date">${format(
+              new Date(release.published_at),
+              "dd MMM yyyy"
             )}</div>
             <div class="body">${release.body.replace(/\r\n/g, "<br>")}</div>
           </div>
@@ -513,50 +472,121 @@ export function findLineByLeastSquares(values_y: number[]): number[][] {
 }
 
 export function getGibberish(): string {
-  const randLen = Math.floor(Math.random() * 7) + 1;
+  const randLen = randomIntFromRange(1, 7);
   let ret = "";
   for (let i = 0; i < randLen; i++) {
-    ret += String.fromCharCode(97 + Math.floor(Math.random() * 26));
+    ret += String.fromCharCode(97 + randomIntFromRange(0, 25));
   }
   return ret;
 }
 
 export function secondsToString(
   sec: number,
-  fullMinutes = false,
-  fullHours = false
+  alwaysShowMinutes = false,
+  alwaysShowHours = false,
+  delimiter: ":" | "text" = ":",
+  showSeconds = true,
+  showDays = false
 ): string {
-  const hours = Math.floor(sec / 3600);
+  sec = Math.abs(sec);
+  let days = 0;
+  let hours;
+  if (showDays) {
+    days = Math.floor(sec / 86400);
+    hours = Math.floor((sec % 86400) / 3600);
+  } else {
+    hours = Math.floor(sec / 3600);
+  }
   const minutes = Math.floor((sec % 3600) / 60);
   const seconds = roundTo2((sec % 3600) % 60);
+
+  let daysString;
   let hoursString;
   let minutesString;
   let secondsString;
-  hours < 10 ? (hoursString = "0" + hours) : (hoursString = hours);
-  minutes < 10 ? (minutesString = "0" + minutes) : (minutesString = minutes);
-  seconds < 10 && (minutes > 0 || hours > 0 || fullMinutes)
+
+  if (showDays) {
+    days < 10 && delimiter !== "text"
+      ? (daysString = "0" + days)
+      : (daysString = days);
+  }
+  hours < 10 && delimiter !== "text"
+    ? (hoursString = "0" + hours)
+    : (hoursString = hours);
+  minutes < 10 && delimiter !== "text"
+    ? (minutesString = "0" + minutes)
+    : (minutesString = minutes);
+  seconds < 10 &&
+  (minutes > 0 || hours > 0 || alwaysShowMinutes) &&
+  delimiter !== "text"
     ? (secondsString = "0" + seconds)
     : (secondsString = seconds);
 
   let ret = "";
-  if (hours > 0 || fullHours) ret += hoursString + ":";
-  if (minutes > 0 || hours > 0 || fullMinutes) ret += minutesString + ":";
-  ret += secondsString;
-  return ret;
+  if (days > 0 && showDays) {
+    ret += daysString;
+    if (delimiter === "text") {
+      if (days == 1) {
+        ret += " day ";
+      } else {
+        ret += " days ";
+      }
+    } else {
+      ret += delimiter;
+    }
+  }
+  if (hours > 0 || alwaysShowHours) {
+    ret += hoursString;
+    if (delimiter === "text") {
+      if (hours == 1) {
+        ret += " hour ";
+      } else {
+        ret += " hours ";
+      }
+    } else {
+      ret += delimiter;
+    }
+  }
+  if (minutes > 0 || hours > 0 || alwaysShowMinutes) {
+    ret += minutesString;
+    if (delimiter === "text") {
+      if (minutes == 1) {
+        ret += " minute ";
+      } else {
+        ret += " minutes ";
+      }
+    } else if (showSeconds) {
+      ret += delimiter;
+    }
+  }
+  if (showSeconds) {
+    ret += secondsString;
+    if (delimiter === "text") {
+      if (seconds == 1) {
+        ret += " second";
+      } else {
+        ret += " seconds";
+      }
+    }
+  }
+  if (hours === 0 && minutes === 0 && !showSeconds && delimiter === "text") {
+    ret = "less than 1 minute";
+  }
+  return ret.trim();
 }
 
 export function getNumbers(len: number): string {
-  const randLen = Math.floor(Math.random() * len) + 1;
+  const randLen = randomIntFromRange(1, len);
   let ret = "";
   for (let i = 0; i < randLen; i++) {
-    const randomNum = Math.floor(Math.random() * 10);
+    const randomNum = randomIntFromRange(0, 9);
     ret += randomNum.toString();
   }
   return ret;
 }
 
 export function getSpecials(): string {
-  const randLen = Math.floor(Math.random() * 7) + 1;
+  const randLen = randomIntFromRange(1, 7);
   let ret = "";
   const specials = [
     "!",
@@ -584,17 +614,17 @@ export function getSpecials(): string {
     "|",
   ];
   for (let i = 0; i < randLen; i++) {
-    ret += specials[Math.floor(Math.random() * specials.length)];
+    ret += randomElementFromArray(specials);
   }
   return ret;
 }
 
 export function getASCII(): string {
-  const randLen = Math.floor(Math.random() * 10) + 1;
+  const randLen = randomIntFromRange(1, 10);
   let ret = "";
   for (let i = 0; i < randLen; i++) {
-    let ran = 33 + Math.floor(Math.random() * 94);
-    while (ran == 96 || ran == 94) ran = 33 + Math.floor(Math.random() * 94); //todo remove when input rewrite is fixed
+    let ran = 33 + randomIntFromRange(0, 93);
+    while (ran == 96 || ran == 94) ran = 33 + randomIntFromRange(0, 93); //todo remove when input rewrite is fixed
     ret += String.fromCharCode(ran);
   }
   return ret;
@@ -605,9 +635,9 @@ export function getArrows(): string {
   let arrowWord = "";
   let lastchar;
   for (let i = 0; i < 5; i++) {
-    let random = arrowArray[Math.floor(Math.random() * arrowArray.length)];
+    let random = randomElementFromArray(arrowArray);
     while (random === lastchar) {
-      random = arrowArray[Math.floor(Math.random() * arrowArray.length)];
+      random = randomElementFromArray(arrowArray);
     }
     lastchar = random;
     arrowWord += random;
@@ -648,13 +678,14 @@ export function objectToQueryString<T extends string | number | boolean>(
   obj: Record<string, T | T[]>
 ): string {
   const str = [];
-  for (const p in obj)
+  for (const p in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, p)) {
       // Arrays get encoded as a comma(%2C)-separated list
       str.push(
         encodeURIComponent(p) + "=" + encodeURIComponent(obj[p] as unknown as T)
       );
     }
+  }
   return str.join("&");
 }
 
@@ -1023,4 +1054,45 @@ export async function downloadResultsCSV(
   link.click();
   link.remove();
   Loader.hide();
+}
+
+/**
+ * Gets an integer between min and max, both are inclusive.
+ * @param min
+ * @param max
+ * @returns Random integer betwen min and max.
+ */
+export function randomIntFromRange(min: number, max: number): number {
+  const minNorm = Math.ceil(min);
+  const maxNorm = Math.floor(max);
+  return Math.floor(Math.random() * (maxNorm - minNorm + 1) + minNorm);
+}
+
+/**
+ * Shuffle an array of elements using the Fisher–Yates algorithm.
+ * This function mutates the input array.
+ * @param elements
+ */
+export function shuffle<T>(elements: T[]): void {
+  for (let i = elements.length - 1; i > 0; --i) {
+    const j = randomIntFromRange(0, i);
+    const temp = elements[j];
+    elements[j] = elements[i];
+    elements[i] = temp;
+  }
+}
+
+export function randomElementFromArray<T>(array: T[]): T {
+  return array[randomIntFromRange(0, array.length - 1)];
+}
+
+export function randomElementFromObject<T extends object>(
+  object: T
+): T[keyof T] {
+  return randomElementFromArray(Object.values(object));
+}
+
+export function createErrorMessage(error: unknown, message: string): string {
+  if (error instanceof Error) return `${message}: ${error.message}`;
+  return `${message}`;
 }

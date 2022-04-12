@@ -6,10 +6,12 @@ import configs from "./configs";
 import results from "./results";
 import presets from "./presets";
 import apeKeys from "./ape-keys";
+import { version } from "../../version";
 import leaderboards from "./leaderboards";
 import addSwaggerMiddlewares from "./swagger";
 import { asyncHandler } from "../../middlewares/api-utils";
 import { MonkeyResponse } from "../../utils/monkey-response";
+import { recordClientVersion } from "../../utils/prometheus";
 import { Application, NextFunction, Response, Router } from "express";
 
 const pathOverride = process.env.API_PATH_OVERRIDE;
@@ -28,7 +30,9 @@ const API_ROUTE_MAP = {
 };
 
 function addApiRoutes(app: Application): void {
-  let requestsProcessed = 0;
+  app.get("/leaderboard", (_req, res) => {
+    res.sendStatus(404);
+  });
 
   addSwaggerMiddlewares(app);
 
@@ -42,7 +46,11 @@ function addApiRoutes(app: Application): void {
         return;
       }
 
-      requestsProcessed++;
+      if (req.path === "/psas") {
+        const clientVersion = req.headers["client-version"];
+        recordClientVersion(clientVersion?.toString() ?? "unknown");
+      }
+
       next();
     }
   );
@@ -52,7 +60,7 @@ function addApiRoutes(app: Application): void {
     asyncHandler(async (_req, _res) => {
       return new MonkeyResponse("ok", {
         uptime: Date.now() - APP_START_TIME,
-        requestsProcessed,
+        version,
       });
     })
   );

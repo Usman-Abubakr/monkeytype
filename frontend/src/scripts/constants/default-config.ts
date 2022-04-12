@@ -52,7 +52,7 @@ export default <MonkeyTypes.Config>{
   keymapStyle: "staggered",
   keymapLegendStyle: "lowercase",
   keymapLayout: "overrideSync",
-  fontFamily: "roboto_mono",
+  fontFamily: "Roboto_Mono",
   smoothLineScroll: false,
   alwaysShowDecimalPlaces: false,
   alwaysShowWordsHistory: false,
@@ -94,5 +94,5 @@ export default <MonkeyTypes.Config>{
   burstHeatmap: false,
   britishEnglish: false,
   lazyMode: false,
-  showAvg: false,
+  showAverage: "off",
 };

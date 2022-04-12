@@ -1,7 +1,7 @@
 import SettingsGroup from "../settings/settings-group";
 import Config, * as UpdateConfig from "../config";
 import * as Sound from "../controllers/sound-controller";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as DB from "../db";
 import * as Funbox from "../test/funbox";
 import * as TagController from "../controllers/tag-controller";
@@ -13,6 +13,7 @@ import * as ConfigEvent from "../observables/config-event";
 import * as ActivePage from "../states/active-page";
 import * as ApeKeysPopup from "../popups/ape-keys-popup";
 import Page from "./page";
+import { Auth } from "../firebase";
 
 type SettingsGroups = {
   [key: string]: SettingsGroup;
@@ -60,9 +61,9 @@ async function initGroups(): Promise<void> {
     UpdateConfig.setShowTimerProgress,
     "button"
   );
-  groups["showAvg"] = new SettingsGroup(
-    "showAvg",
-    UpdateConfig.setShowAvg,
+  groups["showAverage"] = new SettingsGroup(
+    "showAverage",
+    UpdateConfig.setShowAverage,
     "button"
   );
   groups["keymapMode"] = new SettingsGroup(
@@ -393,6 +394,7 @@ export function reset(): void {
   $(".pageSettings .section.fontFamily .buttons").empty();
 }
 
+let groupsInitialized = false;
 export async function fillSettingsPage(): Promise<void> {
   if (Config.showKeyTips) {
     $(".pageSettings .tip").removeClass("hidden");
@@ -402,8 +404,8 @@ export async function fillSettingsPage(): Promise<void> {
 
   // Language Selection Combobox
   const languageEl = $(".pageSettings .section.language select").empty();
-  const groups = await Misc.getLanguageGroups();
-  groups.forEach((group) => {
+  const languageGroups = await Misc.getLanguageGroups();
+  languageGroups.forEach((group) => {
     let langComboBox = `<optgroup label="${group.name}">`;
     group.languages.forEach((language: string) => {
       langComboBox += `<option value="${language}">
@@ -532,7 +534,14 @@ export async function fillSettingsPage(): Promise<void> {
   );
 
   setEventDisabled(true);
-  await initGroups();
+  if (!groupsInitialized) {
+    await initGroups();
+    groupsInitialized = true;
+  } else {
+    Object.keys(groups).forEach((groupKey) => {
+      groups[groupKey].updateInput();
+    });
+  }
   setEventDisabled(false);
   await ThemePicker.refreshButtons();
   await UpdateConfig.loadPromise;
@@ -548,7 +557,7 @@ export function hideAccountSection(): void {
 
 export function updateDiscordSection(): void {
   //no code and no discord
-  if (firebase.auth().currentUser == null) {
+  if (Auth.currentUser == null) {
     $(".pageSettings .section.discordIntegration").addClass("hidden");
   } else {
     if (DB.getSnapshot() == null) return;
@@ -575,15 +584,13 @@ export function updateAuthSections(): void {
   $(".pageSettings .section.passwordAuthSettings .button").addClass("hidden");
   $(".pageSettings .section.googleAuthSettings .button").addClass("hidden");
 
-  const user = firebase.auth().currentUser;
+  const user = Auth.currentUser;
   if (!user) return;
 
   const passwordProvider = user.providerData.find(
-    //@ts-ignore todo remove then firebase is initialised in code rather than with a script tag
     (provider) => provider.providerId === "password"
   );
   const googleProvider = user.providerData.find(
-    //@ts-ignore
     (provider) => provider.providerId === "google.com"
   );
 
@@ -628,7 +635,7 @@ function setActiveFunboxButton(): void {
 }
 
 function refreshTagsSettingsSection(): void {
-  if (firebase.auth().currentUser !== null && DB.getSnapshot() !== null) {
+  if (Auth.currentUser !== null && DB.getSnapshot() !== null) {
     const tagsEl = $(".pageSettings .section.tags .tagsList").empty();
     DB.getSnapshot().tags?.forEach((tag) => {
       // let tagPbString = "No PB found";
@@ -663,7 +670,7 @@ function refreshTagsSettingsSection(): void {
 }
 
 function refreshPresetsSettingsSection(): void {
-  if (firebase.auth().currentUser !== null && DB.getSnapshot() !== null) {
+  if (Auth.currentUser !== null && DB.getSnapshot() !== null) {
     const presetsEl = $(".pageSettings .section.presets .presetsList").empty();
     DB.getSnapshot().presets?.forEach((preset: MonkeyTypes.Preset) => {
       presetsEl.append(`
@@ -1001,8 +1008,9 @@ $(document).on(
   `.pageSettings .section.autoSwitchThemeInputs select.light`,
   (e) => {
     const target = $(e.currentTarget);
-    if (target.hasClass("disabled") || target.hasClass("no-auto-handle"))
+    if (target.hasClass("disabled") || target.hasClass("no-auto-handle")) {
       return;
+    }
     UpdateConfig.setThemeLight(target.val() as string);
   }
 );
@@ -1012,8 +1020,9 @@ $(document).on(
   `.pageSettings .section.autoSwitchThemeInputs select.dark`,
   (e) => {
     const target = $(e.currentTarget);
-    if (target.hasClass("disabled") || target.hasClass("no-auto-handle"))
+    if (target.hasClass("disabled") || target.hasClass("no-auto-handle")) {
       return;
+    }
     UpdateConfig.setThemeDark(target.val() as string);
   }
 );
@@ -1023,6 +1032,10 @@ export function setEventDisabled(value: boolean): void {
   configEventDisabled = value;
 }
 ConfigEvent.subscribe((eventKey) => {
+  if (eventKey === "fullConfigChange") setEventDisabled(true);
+  if (eventKey === "fullConfigChangeFinished") {
+    setEventDisabled(false);
+  }
   if (configEventDisabled || eventKey === "saveToLocalStorage") return;
   if (ActivePage.get() === "settings" && eventKey !== "theme") {
     update();

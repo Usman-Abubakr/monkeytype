@@ -4,7 +4,7 @@ import * as TestStats from "../test/test-stats";
 import * as Monkey from "../test/monkey";
 import Config, * as UpdateConfig from "../config";
 import * as Keymap from "../elements/keymap";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as LiveAcc from "../test/live-acc";
 import * as LiveBurst from "../test/live-burst";
 import * as Funbox from "../test/funbox";
@@ -32,13 +32,15 @@ import * as TestWords from "../test/test-words";
 let dontInsertSpace = false;
 let correctShiftUsed = true;
 
+const wordsInput = document.getElementById("wordsInput") as HTMLInputElement;
+
 function setWordsInput(value: string): void {
   // Only change #wordsInput if it's not already the wanted value
   // Avoids Safari triggering unneeded events, causing issues with
   // dead keys.
   // console.log("settings words input to " + value);
-  if (value !== $("#wordsInput").val()) {
-    $("#wordsInput").val(value);
+  if (value !== wordsInput.value) {
+    wordsInput.value = value;
   }
 }
 
@@ -63,8 +65,9 @@ function backspaceToPrevious(): void {
   if (
     TestInput.input.history.length == 0 ||
     TestUI.currentWordElementIndex == 0
-  )
+  ) {
     return;
+  }
 
   if (
     (TestInput.input.history[TestWords.words.currentIndex - 1] ==
@@ -190,8 +193,9 @@ function handleSpace(): void {
       return;
     }
     PaceCaret.handleSpace(false, currentWord);
-    if (Config.blindMode && Config.highlightMode !== "off")
+    if (Config.blindMode && Config.highlightMode !== "off") {
       $("#words .word.active letter").addClass("correct");
+    }
     TestInput.input.pushHistory();
     TestUI.highlightBadWord(TestUI.currentWordElementIndex, !Config.blindMode);
     TestWords.words.increaseCurrentIndex();
@@ -573,15 +577,13 @@ function handleChar(char: string, charIndex: number): void {
   }
 }
 
-function handleTab(event: JQuery.KeyDownEvent): void {
+function handleTab(event: JQuery.KeyDownEvent, popupVisible: boolean): void {
+  //todo refactor this mess
   if (TestUI.resultCalculating) {
     event.preventDefault();
   }
-  if (
-    !$("#presetWrapper").hasClass("hidden") ||
-    !$("#tagsWrapper").hasClass("hidden")
-  ) {
-    event.preventDefault();
+  if (ActivePage.get() !== "test" && popupVisible) {
+    // event.preventDefault();
     return;
   }
   if ($("#customTextPopup .textarea").is(":focus")) {
@@ -611,6 +613,10 @@ function handleTab(event: JQuery.KeyDownEvent): void {
       if (Config.quickTab) {
         if (!$("#leaderboardsWrapper").hasClass("hidden")) {
           Leaderboards.hide();
+        }
+        if (popupVisible) {
+          event.preventDefault();
+          return;
         }
         if (
           TestUI.resultVisible ||
@@ -699,7 +705,7 @@ $(document).keydown(async (event) => {
     (event.key == "Tab" && !Config.swapEscAndTab) ||
     (event.key == "Escape" && Config.swapEscAndTab)
   ) {
-    handleTab(event);
+    handleTab(event, popupVisible);
   }
 
   if (!allowTyping) return;
@@ -709,7 +715,7 @@ $(document).keydown(async (event) => {
     return;
   }
 
-  if (TestInput.spacingDebug)
+  if (TestInput.spacingDebug) {
     console.log(
       "spacing debug",
       "keypress",
@@ -717,6 +723,7 @@ $(document).keydown(async (event) => {
       "length",
       TestInput.keypressTimings.spacing.array.length
     );
+  }
   TestInput.recordKeypressSpacing();
   TestInput.setKeypressDuration(performance.now());
   TestInput.setKeypressNotAfk();
@@ -749,8 +756,9 @@ $(document).keydown(async (event) => {
 
   if (event.key === "Backspace" && TestInput.input.current.length === 0) {
     backspaceToPrevious();
-    if (TestInput.input.current)
+    if (TestInput.input.current) {
       setWordsInput(" " + TestInput.input.current + " ");
+    }
   }
 
   if (event.key === "Enter") {
@@ -871,8 +879,9 @@ $("#wordsInput").on("input", (event) => {
     }
   } else if (inputValue !== TestInput.input.current) {
     let diffStart = 0;
-    while (inputValue[diffStart] === TestInput.input.current[diffStart])
+    while (inputValue[diffStart] === TestInput.input.current[diffStart]) {
       diffStart++;
+    }
 
     for (let i = diffStart; i < inputValue.length; i++) {
       handleChar(inputValue[i], i);

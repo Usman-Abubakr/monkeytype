@@ -5,6 +5,9 @@ import * as CommandlineLists from "./commandline-lists";
 import * as TestUI from "../test/test-ui";
 import * as DB from "../db";
 import * as Notifications from "../elements/notifications";
+import * as AnalyticsController from "../controllers/analytics-controller";
+import * as PageTransition from "../states/page-transition";
+import { Auth } from "../firebase";
 
 let commandLineMouseMode = false;
 
@@ -89,10 +92,12 @@ function showFound(): void {
           if (
             (!/theme/gi.test(obj.id) || obj.id === "toggleCustomTheme") &&
             !ThemeController.randomTheme
-          )
+          ) {
             ThemeController.clearPreview();
-          if (!/font/gi.test(obj.id))
+          }
+          if (!/font/gi.test(obj.id)) {
             UpdateConfig.previewFontFamily(Config.fontFamily);
+          }
           if (obj.hover) obj.hover();
           return false;
         } else {
@@ -122,8 +127,9 @@ function updateSuggested(): void {
     return;
   }
   //ignore the preceeding ">"s in the command line input
-  if (inputVal[0] && inputVal[0][0] == ">")
+  if (inputVal[0] && inputVal[0][0] == ">") {
     inputVal[0] = inputVal[0].replace(/^>+/, "");
+  }
   if (inputVal[0] == "" && inputVal.length == 1) {
     $.each(list.list, (_index, obj) => {
       if (obj.visible !== false) obj.found = true;
@@ -180,7 +186,7 @@ export let show = (): void => {
   $("#commandLine input").trigger("focus");
 };
 
-function hide(): void {
+function hide(shouldFocusTestUI = true): void {
   UpdateConfig.previewFontFamily(Config.fontFamily);
   // applyCustomThemeColors();
   if (!ThemeController.randomTheme) {
@@ -197,19 +203,27 @@ function hide(): void {
       () => {
         $("#commandLineWrapper").addClass("hidden");
         $("#commandLine").removeClass("allCommands");
-        TestUI.focusWords();
+        if (shouldFocusTestUI) {
+          TestUI.focusWords();
+        }
       }
     );
-  TestUI.focusWords();
+  if (shouldFocusTestUI) {
+    TestUI.focusWords();
+  }
 }
 
 function trigger(command: string): void {
   let subgroup = false;
   let input = false;
+  let shouldFocusTestUI = true;
   const list = CommandlineLists.current[CommandlineLists.current.length - 1];
   let sticky = false;
   $.each(list.list, (_index, obj) => {
     if (obj.id == command) {
+      if (obj.shouldFocusTestUI !== undefined) {
+        shouldFocusTestUI = obj.shouldFocusTestUI;
+      }
       if (obj.input) {
         input = true;
         const escaped = obj.display.split("</i>")[1] ?? obj.display;
@@ -232,14 +246,8 @@ function trigger(command: string): void {
     }
   });
   if (!subgroup && !input && !sticky) {
-    try {
-      firebase.analytics().logEvent("usedCommandLine", {
-        command: command,
-      });
-    } catch (e) {
-      console.log("Analytics unavailable");
-    }
-    hide();
+    AnalyticsController.log("usedCommandLine", { command });
+    hide(shouldFocusTestUI);
   }
 }
 
@@ -266,9 +274,10 @@ function addChildCommands(
     icon = "";
   }
 
-  if (parentCommandDisplay)
+  if (parentCommandDisplay) {
     commandItemDisplay =
       parentCommandDisplay + " > " + icon + commandItemDisplay;
+  }
   if ((commandItem as MonkeyTypes.Command).subgroup) {
     const command = commandItem as MonkeyTypes.Command;
     if (command.beforeSubgroup) command.beforeSubgroup();
@@ -300,10 +309,11 @@ function addChildCommands(
     const tempCommandItem: MonkeyTypes.Command = {
       ...(commandItem as MonkeyTypes.Command),
     };
-    if (parentCommand)
+    if (parentCommand) {
       (tempCommandItem as MonkeyTypes.Command).icon = (
         parentCommand as unknown as MonkeyTypes.Command
       ).icon;
+    }
     if (parentCommandDisplay) tempCommandItem.display = commandItemDisplay;
     unifiedCommands.push(tempCommandItem);
   }
@@ -335,8 +345,9 @@ function useSingleListCommandLine(sshow = true): void {
   // } else if (Config.singleListCommandLine == "on") {
   CommandlineLists.setCurrent([allCommands]);
   // }
-  if (Config.singleListCommandLine != "manual")
+  if (Config.singleListCommandLine != "manual") {
     $("#commandLine").addClass("allCommands");
+  }
   if (sshow) show();
 }
 
@@ -346,8 +357,9 @@ function restoreOldCommandLine(sshow = true): void {
     CommandlineLists.setCurrent(
       CommandlineLists.current.filter((l) => l.title != "All Commands")
     );
-    if (CommandlineLists.current.length < 1)
+    if (CommandlineLists.current.length < 1) {
       CommandlineLists.setCurrent([CommandlineLists.defaultCommands]);
+    }
   }
   if (sshow) show();
 }
@@ -364,13 +376,15 @@ $("#commandLine input").keyup((e) => {
     e.key === "Tab" ||
     e.code == "AltLeft" ||
     (e.key.length > 1 && e.key !== "Backspace" && e.key !== "Delete")
-  )
+  ) {
     return;
+  }
   updateSuggested();
 });
 
 $(document).ready(() => {
   $(document).on("keydown", (event) => {
+    if (PageTransition.get()) return event.preventDefault();
     // opens command line if escape, ctrl/cmd + shift + p, or tab is pressed if the setting swapEscAndTab is enabled
     if (
       event.key === "Escape" ||
@@ -431,13 +445,7 @@ $("#commandInput input").on("keydown", (e) => {
         }
       }
     });
-    try {
-      firebase.analytics().logEvent("usedCommandLine", {
-        command: command,
-      });
-    } catch (e) {
-      console.log("Analytics unavailable");
-    }
+    AnalyticsController.log("usedCommandLine", { command: command ?? "" });
     hide();
   }
   return;
@@ -479,10 +487,12 @@ $("#commandLineWrapper #commandLine .suggestions").on("mouseover", (e) => {
         if (
           (!/theme/gi.test(obj.id) || obj.id === "toggleCustomTheme") &&
           !ThemeController.randomTheme
-        )
+        ) {
           ThemeController.clearPreview();
-        if (!/font/gi.test(obj.id))
+        }
+        if (!/font/gi.test(obj.id)) {
           UpdateConfig.previewFontFamily(Config.fontFamily);
+        }
         if (obj.hover) obj.hover();
       }
     });
@@ -627,8 +637,9 @@ $(document).on("keydown", (e) => {
           ($($(".entry")[0]).outerHeight() as number);
         $(".suggestions").scrollTop(scroll);
       } catch (e) {
-        if (e instanceof Error)
+        if (e instanceof Error) {
           console.log("could not scroll suggestions: " + e.message);
+        }
       }
       // console.log(`scrolling to ${scroll}`);
       try {
@@ -639,10 +650,12 @@ $(document).on("keydown", (e) => {
             if (
               (!/theme/gi.test(obj.id) || obj.id === "toggleCustomTheme") &&
               !ThemeController.randomTheme
-            )
+            ) {
               ThemeController.clearPreview();
-            if (!/font/gi.test(obj.id))
+            }
+            if (!/font/gi.test(obj.id)) {
               UpdateConfig.previewFontFamily(Config.fontFamily);
+            }
             if (obj.hover) obj.hover();
           }
         });
@@ -684,7 +697,7 @@ $(document).on("click", "#testModesNotice .text-button", (event) => {
 $(document).on("click", "#bottom .leftright .right .current-theme", (e) => {
   if (e.shiftKey) {
     if (!Config.customTheme) {
-      if (firebase.auth().currentUser !== null) {
+      if (Auth.currentUser !== null) {
         if (DB.getSnapshot().customThemes.length < 1) {
           Notifications.add("No custom themes!", 0);
           UpdateConfig.setCustomTheme(false);

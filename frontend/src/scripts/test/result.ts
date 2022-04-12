@@ -1,6 +1,6 @@
 import * as TestUI from "./test-ui";
 import Config from "../config";
-import * as Misc from "../misc";
+import * as Misc from "../utils/misc";
 import * as TestStats from "./test-stats";
 import * as Keymap from "../elements/keymap";
 import * as ChartController from "../controllers/chart-controller";
@@ -12,6 +12,11 @@ import * as QuoteRatePopup from "../popups/quote-rate-popup";
 import * as GlarsesMode from "../states/glarses-mode";
 import * as TestInput from "./test-input";
 import * as Notifications from "../elements/notifications";
+import { Chart } from "chart.js";
+import { Auth } from "../firebase";
+
+import type { PluginChartOptions, ScaleChartOptions } from "chart.js";
+import type { AnnotationOptions } from "chartjs-plugin-annotation";
 
 let result: MonkeyTypes.Result<MonkeyTypes.Mode>;
 let maxChartVal: number;
@@ -23,8 +28,12 @@ export function toggleUnsmoothedRaw(): void {
   Notifications.add(useUnsmoothedRaw ? "on" : "off", 1);
 }
 
+let resultAnnotation: AnnotationOptions<"line">[] = [];
+let resultScaleOptions = (
+  ChartController.result.options as ScaleChartOptions<"line" | "scatter">
+).scales;
+
 async function updateGraph(): Promise<void> {
-  ChartController.result.options.annotation.annotations = [];
   const labels = [];
   for (let i = 1; i <= TestInput.wpmHistory.length; i++) {
     if (TestStats.lastSecondNotRound && i === TestInput.wpmHistory.length) {
@@ -33,10 +42,10 @@ async function updateGraph(): Promise<void> {
       labels.push(i.toString());
     }
   }
-  ChartController.result.updateColors();
   ChartController.result.data.labels = labels;
-  ChartController.result.options.scales.yAxes[0].scaleLabel.labelString =
-    Config.alwaysShowCPM ? "Character per Minute" : "Words per Minute";
+  resultScaleOptions["wpm"].title.text = Config.alwaysShowCPM
+    ? "Character per Minute"
+    : "Words per Minute";
   const chartData1 = Config.alwaysShowCPM
     ? TestInput.wpmHistory.map((a) => a * 5)
     : TestInput.wpmHistory;
@@ -68,11 +77,11 @@ async function updateGraph(): Promise<void> {
     const minChartVal = Math.min(
       ...[Math.min(...chartData2), Math.min(...chartData1)]
     );
-    ChartController.result.options.scales.yAxes[0].ticks.min = minChartVal;
-    ChartController.result.options.scales.yAxes[1].ticks.min = minChartVal;
+    resultScaleOptions["wpm"].min = minChartVal;
+    resultScaleOptions["raw"].min = minChartVal;
   } else {
-    ChartController.result.options.scales.yAxes[0].ticks.min = 0;
-    ChartController.result.options.scales.yAxes[1].ticks.min = 0;
+    resultScaleOptions["wpm"].min = 0;
+    resultScaleOptions["raw"].min = 0;
   }
 
   ChartController.result.data.datasets[2].data = result.chartData.err;
@@ -83,37 +92,37 @@ async function updateGraph(): Promise<void> {
     if (Config.funbox === "layoutfluid") {
       content += " " + Config.customLayoutfluid.replace(/#/g, " ");
     }
-    ChartController.result.options.annotation.annotations.push({
-      enabled: false,
+    resultAnnotation.push({
+      display: true,
+      id: "funbox-label",
       type: "line",
-      mode: "horizontal",
       scaleID: "wpm",
-      value: 0,
+      value: resultScaleOptions["wpm"].min,
       borderColor: "transparent",
       borderWidth: 1,
       borderDash: [2, 2],
       label: {
         backgroundColor: "transparent",
-        fontFamily: Config.fontFamily.replace(/_/g, " "),
-        fontSize: 11,
-        fontStyle: "normal",
-        fontColor: fc,
-        xPadding: 6,
-        yPadding: 6,
-        cornerRadius: 3,
-        position: "left",
+        font: {
+          family: Config.fontFamily.replace(/_/g, " "),
+          size: 11,
+          style: "normal",
+          weight: Chart.defaults.font.weight as string,
+          lineHeight: Chart.defaults.font.lineHeight as number,
+        },
+        color: fc,
+        padding: 3,
+        borderRadius: 3,
+        position: "start",
         enabled: true,
         content: `${content}`,
-        yAdjust: -11,
       },
     });
   }
 
-  ChartController.result.options.scales.yAxes[0].ticks.max = maxChartVal;
-  ChartController.result.options.scales.yAxes[1].ticks.max = maxChartVal;
-
-  ChartController.result.update();
-  ChartController.result.resize();
+  resultScaleOptions["wpm"].max = maxChartVal;
+  resultScaleOptions["raw"].max = maxChartVal;
+  resultScaleOptions["error"].max = Math.max(...result.chartData.err) + 1;
 }
 
 export async function updateGraphPBLine(): Promise<void> {
@@ -131,10 +140,10 @@ export async function updateGraphPBLine(): Promise<void> {
   const chartlpb = Misc.roundTo2(Config.alwaysShowCPM ? lpb * 5 : lpb).toFixed(
     2
   );
-  ChartController.result.options.annotation.annotations.push({
-    enabled: false,
+  resultAnnotation.push({
+    display: true,
     type: "line",
-    mode: "horizontal",
+    id: "lpb",
     scaleID: "wpm",
     value: chartlpb,
     borderColor: themecolors["sub"],
@@ -142,13 +151,16 @@ export async function updateGraphPBLine(): Promise<void> {
     borderDash: [2, 2],
     label: {
       backgroundColor: themecolors["sub"],
-      fontFamily: Config.fontFamily.replace(/_/g, " "),
-      fontSize: 11,
-      fontStyle: "normal",
-      fontColor: themecolors["bg"],
-      xPadding: 6,
-      yPadding: 6,
-      cornerRadius: 3,
+      font: {
+        family: Config.fontFamily.replace(/_/g, " "),
+        size: 11,
+        style: "normal",
+        weight: Chart.defaults.font.weight as string,
+        lineHeight: Chart.defaults.font.lineHeight as number,
+      },
+      color: themecolors["bg"],
+      padding: 3,
+      borderRadius: 3,
       position: "center",
       enabled: true,
       content: `PB: ${chartlpb}`,
@@ -158,13 +170,10 @@ export async function updateGraphPBLine(): Promise<void> {
     maxChartVal >= parseFloat(chartlpb) - 20 &&
     maxChartVal <= parseFloat(chartlpb) + 20
   ) {
-    maxChartVal = parseFloat(chartlpb) + 20;
+    maxChartVal = parseFloat(chartlpb) + 15;
   }
-  ChartController.result.options.scales.yAxes[0].ticks.max =
-    Math.round(maxChartVal);
-  ChartController.result.options.scales.yAxes[1].ticks.max =
-    Math.round(maxChartVal);
-  ChartController.result.update();
+  resultScaleOptions["wpm"].max = Math.round(maxChartVal + 5);
+  resultScaleOptions["raw"].max = Math.round(maxChartVal + 5);
 }
 
 function updateWpmAndAcc(): void {
@@ -365,7 +374,7 @@ function updateTags(dontSave: boolean): void {
     $("#result .stats .tags").removeClass("hidden");
   }
   $("#result .stats .tags .bottom").text("");
-  let annotationSide = "left";
+  let annotationSide = "start";
   let labelAdjust = 15;
   activeTags.forEach(async (tag) => {
     const tpb = await DB.getLocalTagPB(
@@ -406,10 +415,10 @@ function updateTags(dontSave: boolean): void {
         // console.log("new pb for tag " + tag.name);
       } else {
         const themecolors = await ThemeColors.getAll();
-        ChartController.result.options.annotation.annotations.push({
-          enabled: false,
+        resultAnnotation.push({
+          display: true,
           type: "line",
-          mode: "horizontal",
+          id: "tpb",
           scaleID: "wpm",
           value: Config.alwaysShowCPM ? tpb * 5 : tpb,
           borderColor: themecolors["sub"],
@@ -417,13 +426,16 @@ function updateTags(dontSave: boolean): void {
           borderDash: [2, 2],
           label: {
             backgroundColor: themecolors["sub"],
-            fontFamily: Config.fontFamily.replace(/_/g, " "),
-            fontSize: 11,
-            fontStyle: "normal",
-            fontColor: themecolors["bg"],
-            xPadding: 6,
-            yPadding: 6,
-            cornerRadius: 3,
+            font: {
+              family: Config.fontFamily.replace(/_/g, " "),
+              size: 11,
+              style: "normal",
+              weight: Chart.defaults.font.weight as string,
+              lineHeight: Chart.defaults.font.lineHeight as number,
+            },
+            color: themecolors["bg"],
+            padding: 3,
+            borderRadius: 3,
             position: annotationSide,
             xAdjust: labelAdjust,
             enabled: true,
@@ -432,11 +444,11 @@ function updateTags(dontSave: boolean): void {
             ).toFixed(2)}`,
           },
         });
-        if (annotationSide === "left") {
-          annotationSide = "right";
+        if (annotationSide === "start") {
+          annotationSide = "end";
           labelAdjust = -15;
         } else {
-          annotationSide = "left";
+          annotationSide = "start";
           labelAdjust = 15;
         }
       }
@@ -454,8 +466,9 @@ function updateTestType(randomQuote: MonkeyTypes.Quote): void {
   } else if (Config.mode === "words") {
     testType += " " + Config.words;
   } else if (Config.mode === "quote") {
-    if (randomQuote.group !== undefined)
+    if (randomQuote.group !== undefined) {
       testType += " " + ["short", "medium", "long", "thicc"][randomQuote.group];
+    }
   }
   if (
     Config.mode != "custom" &&
@@ -568,7 +581,7 @@ function updateQuoteSource(randomQuote: MonkeyTypes.Quote): void {
   }
 }
 
-export function update(
+export async function update(
   res: MonkeyTypes.Result<MonkeyTypes.Mode>,
   difficultyFailed: boolean,
   failReason: string,
@@ -577,7 +590,11 @@ export function update(
   tooShort: boolean,
   randomQuote: MonkeyTypes.Quote,
   dontSave: boolean
-): void {
+): Promise<void> {
+  resultScaleOptions = (
+    ChartController.result.options as ScaleChartOptions<"line" | "scatter">
+  ).scales;
+  resultAnnotation = [];
   result = res;
   $("#result #resultWordsHistory").addClass("hidden");
   $("#retrySavingResultButton").addClass("hidden");
@@ -590,7 +607,7 @@ export function update(
   $("#words").removeClass("blurred");
   $("#wordsInput").blur();
   $("#result .stats .time .bottom .afk").text("");
-  if (firebase.auth().currentUser != null) {
+  if (Auth.currentUser != null) {
     $("#result .loginTip").addClass("hidden");
   } else {
     $("#result .loginTip").removeClass("hidden");
@@ -601,10 +618,16 @@ export function update(
   updateKey();
   updateTestType(randomQuote);
   updateQuoteSource(randomQuote);
-  updateGraph();
-  updateGraphPBLine();
+  await updateGraph();
+  await updateGraphPBLine();
   updateTags(dontSave);
   updateOther(difficultyFailed, failReason, afkDetected, isRepeated, tooShort);
+
+  ((ChartController.result.options as PluginChartOptions<"line" | "scatter">)
+    .plugins.annotation.annotations as AnnotationOptions<"line">[]) =
+    resultAnnotation;
+  ChartController.result.updateColors();
+  ChartController.result.resize();
 
   if (
     $("#result .stats .tags").hasClass("hidden") &&
@@ -645,7 +668,7 @@ export function update(
     $("#middle #result .stats").removeClass("hidden");
     $("#middle #result .chart").removeClass("hidden");
     // $("#middle #result #resultWordsHistory").removeClass("hidden");
-    if (firebase.auth().currentUser == null) {
+    if (Auth.currentUser == null) {
       $("#middle #result .loginTip").removeClass("hidden");
     }
     $("#middle #result #showWordHistoryButton").removeClass("hidden");
@@ -653,10 +676,11 @@ export function update(
     $("#middle #result #saveScreenshotButton").removeClass("hidden");
   }
 
-  if (window.scrollY > 0)
+  if (window.scrollY > 0) {
     $([document.documentElement, document.body])
       .stop()
       .animate({ scrollTop: 0 }, 250);
+  }
 
   Misc.swapElements(
     $("#typingTest"),
